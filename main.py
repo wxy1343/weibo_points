@@ -15,7 +15,6 @@ is_frequent = False
 headers = {}
 headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0'
 cf = Config('config.ini', '配置')
-ua = 'OnePlus-ONEPLUS A6000__weibo__10.1.2__android__android10'
 
 
 def create_weibo(text, cid):
