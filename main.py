@@ -15,29 +15,31 @@ is_frequent = False
 headers = {}
 headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0'
 cf = Config('config.ini', '配置')
+ua = 'OnePlus-ONEPLUS A6000__weibo__10.1.2__android__android10'
 
 
-def create(content, cid=''):
+def create_weibo(text, cid):
     """
     创建微博
-    :param content: 微博内容
+    :param text: 内容
     :param cid: 超话id
-    :return: 帖子mid
+    :return:
     """
-    url = f'https://api.weibo.cn/2/statuses/send?c=android&s=68998320&from=10A3295010&gsid={gsid}'
-    data = {'content': content, 'sync_mblog': '1'}
-    if cid != '':
-        data['topic_id'] = '1022:' + cid
-    response = requests.post(url=url, data=data)
-    if 'errmsg' in response.text:
-        print(response.json()['errmsg'])
-        return False
-    elif 'created_at' in response.text:
-        mid = response.json()['mid']
+    headers = {'Referer': 'https://weibo.com'}
+    cookies = {'SUB': gsid}
+    data = {
+        'text': text, 'sync_wb': '1',
+        'api': f'http://i.huati.weibo.com/pcpage/operation/publisher/sendcontent?sign=super&page_id={cid}',
+        'topic_id': f'1022:{cid}'}
+    url = 'https://weibo.com/p/aj/proxy?ajwvr=6'
+    r = requests.post(url, data=data, cookies=cookies, headers=headers)
+    if r.json()['code'] == '100000':
+        mid = r.json()['data']['mid']
         cf.Add('配置', 'mid', mid)
         cf.Add('配置', 'time', str(time.time()))
         return mid
     else:
+        print(r.json()['msg'])
         return False
 
 
@@ -101,36 +103,6 @@ def comment(args):
         return
 
 
-def comment_wap(args):
-    """
-    wap评论帖子
-    :param args:
-    :return:
-    """
-    mid, content = args
-    global com_suc_num
-    print(str(com_suc_num) + '.正在评论：https://m.weibo.cn/detail/' + mid)
-    url = 'https://m.weibo.cn/comments/hotflow?mid=' + mid
-    response = requests.get(url, headers=headers)
-    if not uid in response.text:
-        url = 'https://m.weibo.cn/detail/' + mid
-        req = requests.Session()
-        response = req.get(url, headers=headers)
-        if not my_mid in response.text:
-            url = 'https://api.weibo.cn/2/comments/create?c=android&s=68998320&from=10A3295010&gsid=' + gsid
-            data = {'comment': content, 'id': mid}
-            response = requests.post(url, data=data)
-            if 'errmsg' in response.text:
-                print(response.json()['errmsg'] + '：https://m.weibo.cn/detail/' + mid)
-            elif 'created_at' in response.text:
-                print('评论成功：https://m.weibo.cn/detail/' + mid)
-                com_suc_num += 1
-            else:
-                print('评论失败：https://m.weibo.cn/detail/' + mid)
-        return
-    print('你已评论过该内容：https://m.weibo.cn/detail/' + mid)
-
-
 def after_zoro(t):
     """
     判断是否是当天零点后发布的
@@ -177,6 +149,15 @@ def clear_mid_file():
     :return:
     """
     open('mid.txt', 'w').close()
+
+
+def get_mid_num():
+    count = 0
+    with open('mid.txt', 'r') as f:
+        for i in f.read().split('\n'):
+            if i != '':
+                count += 1
+    return count
 
 
 def get_mid(cid, page=1):
@@ -640,8 +621,8 @@ if __name__ == '__main__':
 
     get_mid_page = 5  # 一次爬取微博页数
     get_mid_max = 30  # 爬取失败时最多爬取的页数
-    loop_comments_num = 30  # 运行次数
-    comments_wait_time = 300  # 每次延迟运行时间
+    loop_comments_num = 10  # 运行次数
+    comments_wait_time = 10  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
     # 微信推送 http://sc.ftqq.com
     SCKEY = ''
@@ -649,7 +630,7 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
     # 需要发送的群聊的id
     gid_list = [
-        
+
     ]
 
     gsid = get_gsid()
@@ -666,7 +647,7 @@ if __name__ == '__main__':
             print('读取成功')
     else:
         print('正在创建微博')
-        my_mid = create(f'#{st_name}[超话]#积分！', cid)
+        my_mid = create_weibo(f'#{st_name}[超话]#积分！', cid)
         if my_mid == False:
             print('创建失败')
             exit()
