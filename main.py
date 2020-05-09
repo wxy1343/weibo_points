@@ -466,8 +466,9 @@ def vip_pk(gsid):
         card.append({'name': name, 'action': action})
 
     # 随机选择一个pk
-    name = random.choice(card)['name']
-    action = random.choice(card)['action']
+    card = random.choice(card)
+    name = card['name']
+    action = card['action']
     print('正在pk：' + name)
 
     # 获取pk结果
@@ -585,8 +586,6 @@ def loop_comments(num):
     global is_frequent
     for i in range(num):
         uid = get_uid(gsid)  # 可以用来判断请求频繁
-        if uid is None:
-            is_frequent = True
         if is_frequent:
             while True:
                 n = frequent_wait_time
