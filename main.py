@@ -144,7 +144,7 @@ def mid_in_file(mid):
 
 def clear_mid_file():
     """
-    清楚mid文件
+    清除mid文件
     :return:
     """
     open('mid.txt', 'w').close()
