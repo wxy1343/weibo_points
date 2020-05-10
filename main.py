@@ -337,7 +337,6 @@ def get_uid(gsid):
             return r.json()['data']['uid']
         else:
             print('请重新登录')
-            cf.Add('配置', 'gsid', '')
             exit()
     except:
         if r.json()['ok'] == 0:
