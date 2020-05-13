@@ -72,6 +72,10 @@ def comment(args):
             logging.info(str(r.status_code))
             if r.status_code == 200:
                 break
+            elif r.status_code == 418:
+                time.sleep(0.5)
+            elif r.status_code == 403:
+                return
         except:
             pass
     if f'"id": {uid}' in r.text:
@@ -326,12 +330,23 @@ def get_uid(gsid):
     req = requests.Session()
     cookies = {'SUB': gsid}
     url = 'https://m.weibo.cn/api/config'
-    r = req.get(url, cookies=cookies)
-    r.encoding = 'utf-8'
-    try:
-        logging.info(str(r.status_code) + ':' + str(r.json()))
-    except:
-        logging.warning(str(r.status_code))
+    while True:
+        r = req.get(url, cookies=cookies)
+        r.encoding = 'utf-8'
+        try:
+            logging.info(str(r.status_code) + ':' + str(r.json()))
+        except:
+            logging.warning(str(r.status_code))
+        if r.status_code == 200:
+            break
+        elif r.status_code == 502:
+            time.sleep(0.5)
+        elif r.status_code == 418:
+            is_frequent = True
+            return
+        elif r.status_code == 403:
+            is_frequent = True
+            return
     try:
         if r.json()['data']['login']:
             return r.json()['data']['uid']
@@ -368,8 +383,12 @@ def login():
         if 'errmsg' in response.json():
             print(response.json()['errmsg'])
             continue
+        name = response.json()['screen_name']
         gsid = response.json()['gsid']
+        uid = response.json()['uid']
+        cf.Add('配置', 'name', name)
         cf.Add('配置', 'gsid', gsid)
+        cf.Add('配置', 'uid', uid)
         break
     return gsid
 
@@ -664,26 +683,21 @@ def loop_comments(num):
     global uid
     global is_frequent
     for i in range(num):
+        get_uid(gsid)
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
             exit()
-        uid = get_uid(gsid)  # 可以用来判断请求频繁
         if is_frequent:
-            while True:
-                n = frequent_wait_time
-                push_wechat('weibo_comments', f'''
-                            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                            请求过于频繁,正在等待{n}秒''')
-                while n + 1:
-                    time.sleep(1)
-                    sys.stdout.write(f'\r等待时间：{n}秒')
-                    n -= 1
-                print()
-                is_frequent = False
-                uid = get_uid(gsid)
-                if not is_frequent:
-                    break
-
+            n = frequent_wait_time
+            push_wechat('weibo_comments', f'''
+                        {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                        请求过于频繁,正在等待{n}秒''')
+            while n + 1:
+                time.sleep(1)
+                sys.stdout.write(f'\r等待时间：{n}秒')
+                n -= 1
+            print()
+            is_frequent = False
         else:
             n = comments_wait_time
         while n + 1:
@@ -699,9 +713,9 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     get_mid_page = 5  # 一次爬取微博页数
-    get_mid_max = 100  # 爬取失败时最多爬取的页数
+    get_mid_max = 30  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
-    loop_comments_num = 50  # 运行次数
+    loop_comments_num = 10  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
     # 微信推送 http://sc.ftqq.com
@@ -716,6 +730,7 @@ if __name__ == '__main__':
     gsid = get_gsid()
     if not gsid:
         gsid = login()
+    uid = get_uid(gsid)
     cid = find_super_topic(st_name)
     if is_today():
         print('正在读取微博')
