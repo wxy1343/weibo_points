@@ -36,7 +36,7 @@ def create_weibo(text, cid):
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
-        logging.warning(str(r.status_code))
+        logging.warning(str(r.status_code) + ':' + r.text)
     if r.json()['code'] == '100000':
         mid = r.json()['data']['mid']
         cf.Add('配置', 'mid', mid)
@@ -49,7 +49,7 @@ def create_weibo(text, cid):
 
 def comment(args):
     """
-    评论帖子
+    评论微博
     :param args:
     :return:
     """
@@ -203,6 +203,21 @@ def get_mid(cid, page=1):
     :return: 帖子列表
     """
     global is_frequent
+
+    def analysis_and_join_list(mblog):
+        t = mblog['created_at']
+        mid = mblog['mid']
+        user_id = str(mblog['user']['id'])
+        if not after_zoro(t):
+            return
+        if mid != my_mid and not mid_in_file(mid) and user_id != uid:
+            mid_list.append((mid, user_id))
+            screen_name = mblog['user']['screen_name']
+            print(screen_name.strip().replace('\n', ''), t, mid, user_id)
+            return True
+        else:
+            return False
+
     mid_list = []
     since_id = ''
     start_page = 0
@@ -215,7 +230,6 @@ def get_mid(cid, page=1):
     req.headers = headers
     i = 0  # 爬取成功页数
     p = 0  # 已爬取页数
-    is_after_zoro = False
     while i < page:
         length = len(mid_list)
         with lock:
@@ -237,46 +251,19 @@ def get_mid(cid, page=1):
                     time.sleep(0.5)
             except:
                 pass
+        card_page = 0
         if p + 1 >= start_page:
-            if since_id == '':
+            # 判断是否是第一页
+            if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
+                card_page = 1
                 mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
-                t = mblog['created_at']
-                mid = mblog['mid']
-                is_after_zoro = after_zoro(t)
-                if not is_after_zoro:
-                    break
-                if mid != my_mid and not mid_in_file(mid):
-                    mid_list.append(mid)
-                    screen_name = mblog['user']['screen_name']
-                    print(screen_name.strip().replace('\n', ''), t, mid)
-                for j in r.json()['data']['cards'][1]['card_group']:
-                    mblog = j['mblog']
-                    t = mblog['created_at']
-                    mid = mblog['mid']
-                    is_after_zoro = after_zoro(t)
-                    if not is_after_zoro:
-                        break
-                    if mid == my_mid or mid_in_file(mid):
-                        continue
-                    screen_name = mblog['user']['screen_name']
-                    mid_list.append(mid)
-                    print(screen_name.strip().replace('\n', ''), t, mid)
-            else:
-                for j in r.json()['data']['cards'][0]['card_group']:
-                    mblog = j['mblog']
-                    t = mblog['created_at']
-                    mid = mblog['mid']
-                    is_after_zoro = after_zoro(t)
-                    if not is_after_zoro:
-                        break
-                    if mid == my_mid or mid_in_file(mid):
-                        continue
-                    screen_name = mblog['user']['screen_name']
-                    mid_list.append(mid)
-                    print(screen_name.strip().replace('\n', ''), t, mid)
+                if analysis_and_join_list(mblog) is None:
+                    return mid_list
+            for j in r.json()['data']['cards'][card_page]['card_group']:
+                mblog = j['mblog']
+                if analysis_and_join_list(mblog) is None:
+                    return mid_list
         since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
-        if not is_after_zoro:
-            break
         if length < len(mid_list):
             i += 1
         p += 1
@@ -298,12 +285,14 @@ def get_my_mid():
 
 def get_gsid():
     """
-    获取配置中自己的gsid
+    获取gsid
     :return:
     """
     gsid = cf.GetStr('配置', 'gsid')
     if gsid == '':
-        return False
+        print('请前往"https://m.weibo.cn"获取gsid')
+        gsid = input('请输入你的gsid：')
+        cf.Add('配置', 'gsid', gsid)
     return gsid
 
 
@@ -348,49 +337,17 @@ def get_uid(gsid):
             is_frequent = True
             return
     try:
-        if r.json()['data']['login']:
-            return r.json()['data']['uid']
-        else:
-            print('请重新登录')
-            exit()
+        return r.json()['data']['uid']
     except:
-        if r.json()['ok'] == 0:
+        if not r.json()['data']['login']:
+            print('请重新登录')
+            cf.Del('配置', 'gsid')
+            exit()
+        elif r.json()['ok'] == 0:
             print(r.json()['msg'])
             if r.json()['errno'] == '100005':
                 is_frequent = True
         return
-
-
-def login():
-    """
-    登录微博
-    :return: gsid
-    """
-    url = 'https://api.weibo.cn/2/account/login_sendcode'
-    phone = input('请输入手机号：')
-    data = {'phone': phone}
-    response = requests.post(url=url, data=data)
-    try:
-        print(response.json()['msg'])
-    except:
-        print(response.json()['errmsg'])
-        exit()
-    url = 'https://api.weibo.cn/2/account/login'
-    while True:
-        smscode = input('请输入验证码：')
-        data['smscode'] = smscode
-        response = requests.post(url=url, data=data)
-        if 'errmsg' in response.json():
-            print(response.json()['errmsg'])
-            continue
-        name = response.json()['screen_name']
-        gsid = response.json()['gsid']
-        uid = response.json()['uid']
-        cf.Add('配置', 'name', name)
-        cf.Add('配置', 'gsid', gsid)
-        cf.Add('配置', 'uid', uid)
-        break
-    return gsid
 
 
 def find_super_topic(name):
@@ -412,7 +369,7 @@ def find_super_topic(name):
 def get_bid(mid):
     """
     获取帖子的bid
-    群聊不会被转换成短链
+    bid链接群聊不会被转换成短链
     :param mid: 帖子id
     :return:
     """
@@ -466,29 +423,6 @@ def group_chat_comments(gid):
         print('发送成功：' + title)
     else:
         print('发送失败：' + title)
-
-
-def inside(mid):
-    global is_frequent
-    cookies = {'SUB': gsid}
-    url = 'https://m.weibo.cn/comments/hotflow?mid=' + mid
-    r = requests.get(url, cookies=cookies)
-    if r.json()['ok'] != 1:
-        return False
-    if uid in r.text:
-        return True
-    max_id = r.json()['data']['max_id']
-    cookies.update(r.cookies.get_dict())
-    while max_id != 0:
-        max_id = '&max_id=' + str(max_id)
-        url = 'https://m.weibo.cn/comments/hotflow?mid=' + mid + str(max_id)
-        r = requests.get(url, cookies=cookies)
-        if r.json()['ok'] != 1:
-            return False
-        if uid in r.text:
-            return True
-        max_id = r.json()['data']['max_id']
-    return False
 
 
 def vip_sign(gsid):
@@ -580,7 +514,10 @@ def vip_pk(gsid):
 
 def sign_integral(gsid):
     """
-    每日签到积分
+    连续访问积分
+    访问1天 +3
+    连续访问2天以上 +5
+    连续访问8天及以上 +8
     :param gsid:
     :return:
     """
@@ -625,6 +562,12 @@ def push_wechat(text, desp):
 
 
 def get_st(parmas, gsid):
+    """
+    微博超话客户端的参数加密验证
+    :param parmas:
+    :param gsid:
+    :return:
+    """
     KEY = 'SloRtZ4^OfpVi!#3u!!hmnCYzh*fxN62Nyy*023Z'
     str = ''
     for i in parmas:
@@ -640,6 +583,11 @@ def get_st(parmas, gsid):
 
 
 def login_integral(gsid):
+    """
+    超话登录积分 +10
+    :param gsid:
+    :return:
+    """
     parmas = {'from': '21A3095010', 'ti': str(int(time.time() * 1000))}
     st = get_st(parmas, gsid)
     headers = {'gsid': gsid, 'st': st}
@@ -665,12 +613,17 @@ def start_comments():
     global com_suc_num
     global is_frequent
     mid_list = get_mid(cid, get_mid_page)
-    content = '鞠婧祎雪文曦https://m.weibo.cn/detail/' + my_mid  # 评论内容
-    mid_list = [(mid, content) for mid in mid_list]
+    mid_lists = []
+    for mid, user_id in mid_list:
+        if user_id in custom_comments.keys():
+            content = custom_comments[user_id].format(mid=mid)
+        else:
+            content = default_content.format(mid=mid)
+        mid_lists.append((mid, content))
     com_suc_num = 0
     print('开始评论')
     try:
-        pool.map(comment, mid_list)
+        pool.map(comment, mid_lists)
     except:
         is_frequent = True
     print('评论成功数：' + str(com_suc_num))
@@ -712,8 +665,8 @@ def loop_comments(num):
 
 
 if __name__ == '__main__':
-    get_mid_page = 5  # 一次爬取微博页数
-    get_mid_max = 30  # 爬取失败时最多爬取的页数
+    get_mid_page = 5  # 一次爬微博页数
+    get_mid_max = 10  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
     loop_comments_num = 10  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
@@ -726,10 +679,14 @@ if __name__ == '__main__':
     gid_list = [
 
     ]
+    # 默认评论内容
+    default_content = 'https://m.weibo.cn/detail/{mid}'
+    # 自定义评论内容
+    custom_comments = {
+        # uid:评论内容
+    }
     init_log(logging.INFO)
     gsid = get_gsid()
-    if not gsid:
-        gsid = login()
     uid = get_uid(gsid)
     cid = find_super_topic(st_name)
     if is_today():
