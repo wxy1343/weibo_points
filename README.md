@@ -16,7 +16,7 @@
 * 连续访问积分
 * 超话登录积分
 # 流程图
-![流程图](https://github.com/1343890272/weibo_comments/blob/master/%E6%B5%81%E7%A8%8B%E5%9B%BE.jpg)
+![流程图]()
 # 安装
 ## 1.下载脚本
 ```bash
