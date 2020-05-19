@@ -1,6 +1,4 @@
 import configparser
-import os
-
 
 # 配置处理类
 class Config:
@@ -13,8 +11,7 @@ class Config:
         else:
             self.__configdir = configdir
         self.cf = configparser.ConfigParser()
-        if not os.path.exists(self.__configdir):
-            open(self.__configdir, 'w').close()
+        open(self.__configdir, 'a').close()
         if section != None:
             self.cf.add_section(section)
         return
@@ -60,7 +57,8 @@ class Config:
     def Update(self, section, option, value):
         try:
             self.cf.read(self.__configdir)
-            self.cf.set(section, option, value)
+            if self.option != option:
+                self.cf.set(section, option, value)
             self.cf.write(open(self.__configdir, "r+"))
             return True
         except Exception:
@@ -72,6 +70,15 @@ class Config:
             self.cf.read(self.__configdir)
             self.cf.set(section, option, value)
             self.cf.write(open(self.__configdir, "r+"))
+            return True
+        except Exception:
+            return False
+
+    # 删除数据
+    def Del(self, section, option):
+        try:
+            self.cf.remove_option(section, option)
+            self.cf.write(open(self.__configdir, "w"))
             return True
         except Exception:
             return False
