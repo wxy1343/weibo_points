@@ -14,6 +14,9 @@
 ```bash
 $ git clone https://github.com/1343890272/weibo_comments
 ```
-### 需要
+### 2.安装依赖
+```bash
+$ pip install -r requirements.txt
+```
 ## 使用
 python main.py
