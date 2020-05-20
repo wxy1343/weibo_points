@@ -616,9 +616,9 @@ def start_comments():
     mid_lists = []
     for mid, user_id in mid_list:
         if user_id in custom_comments.keys():
-            content = custom_comments[user_id].format(mid=mid)
+            content = custom_comments[user_id].format(mid=my_mid)
         else:
-            content = default_content.format(mid=mid)
+            content = default_content.format(mid=my_mid)
         mid_lists.append((mid, content))
     com_suc_num = 0
     print('开始评论')
@@ -666,7 +666,7 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     get_mid_page = 5  # 一次爬微博页数
-    get_mid_max = 10  # 爬取失败时最多爬取的页数
+    get_mid_max = 100  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
     loop_comments_num = 10  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
