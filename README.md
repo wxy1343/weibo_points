@@ -33,6 +33,6 @@ $ python main.py
 ```
 ## 2.获取gsid
 1.用Chrome打开<https://m.weibo.cn/login>  
-2.登录成功后，按F12键打开Chrome开发者工具
+2.登录成功后，按F12键打开Chrome开发者工具  
 3.点击Chrome开发者工具中的Network->Name中的m.weibo.cn->Headers->Request Headers->cookie->SUB等于号后面到封号里的值就是gsid
 ![gsid](https://github.com/wxy1343/weibo_integral/blob/master/gsid.png)
