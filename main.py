@@ -130,7 +130,7 @@ def comment(args):
         return
 
 
-def after_zoro(t):
+def after_zero(t):
     """
     判断是否是当天零点后发布的
     :param t:
@@ -208,7 +208,7 @@ def get_mid(cid, page=1):
         t = mblog['created_at']
         mid = mblog['mid']
         user_id = str(mblog['user']['id'])
-        if not after_zoro(t):
+        if not after_zero(t):
             return
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
             mid_list.append((mid, user_id))
@@ -302,11 +302,24 @@ def is_today():
     :return: bool
     """
     t = cf.GetFloat('配置', 'time')
-    zoro_time = int(time.time()) - int(time.time() - time.timezone) % 86400
-    if t != None and t >= zoro_time:
+    zero_time = int(time.time()) - int(time.time() - time.timezone) % 86400
+    if t != None and t >= zero_time:
         return True
     else:
         return False
+
+
+def is_zero():
+    t1 = 0
+    while True:
+        t = int(time.time() - time.timezone) % 86400
+        sys.stdout.write(f'\r距离零点：{str(86400 - t)}s')
+        if t1 > t:
+            print()
+            break
+        else:
+            t1 = t
+        time.sleep(0.1)
 
 
 def get_uid(gsid):
@@ -665,8 +678,9 @@ def loop_comments(num):
 
 
 if __name__ == '__main__':
+    # is_zero()
     get_mid_page = 5  # 一次爬微博页数
-    get_mid_max = 100  # 爬取失败时最多爬取的页数
+    get_mid_max = 10  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
     loop_comments_num = 10  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
@@ -677,13 +691,14 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
     # 需要发送的群聊的id
     gid_list = [
-
+    
     ]
     # 默认评论内容
-    default_content = 'https://m.weibo.cn/detail/{mid}'
+    default_content = '鞠婧祎雪文曦https://m.weibo.cn/detail/{mid}'
     # 自定义评论内容
     custom_comments = {
         # uid:评论内容
+        '7412589264': '鞠婧祎雪文曦'
     }
     init_log(logging.INFO)
     gsid = get_gsid()
@@ -698,6 +713,8 @@ if __name__ == '__main__':
         else:
             print('读取成功')
     else:
+        clear_log()
+        clear_mid_file()
         print('正在创建微博')
         my_mid = create_weibo(f'#{st_name}[超话]#积分！', cid)
         if my_mid == False:
@@ -721,7 +738,5 @@ if __name__ == '__main__':
         print('开始：每日签到积分')
         sign_integral(gsid)
         print('*' * 100)
-        clear_log()
-        clear_mid_file()
     print('https://m.weibo.cn/detail/' + my_mid)
     loop_comments(loop_comments_num)
