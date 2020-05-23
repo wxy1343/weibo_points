@@ -694,11 +694,10 @@ if __name__ == '__main__':
     
     ]
     # 默认评论内容
-    default_content = '鞠婧祎雪文曦https://m.weibo.cn/detail/{mid}'
+    default_content = 'https://m.weibo.cn/detail/{mid}'
     # 自定义评论内容
     custom_comments = {
         # uid:评论内容
-        '7412589264': '鞠婧祎雪文曦'
     }
     init_log(logging.INFO)
     gsid = get_gsid()
