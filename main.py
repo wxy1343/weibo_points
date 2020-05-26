@@ -309,7 +309,11 @@ def is_today():
         return False
 
 
-def is_zero():
+def wait_zero():
+    """
+    等待零点
+    :return:
+    """
     t1 = 0
     while True:
         t = int(time.time() - time.timezone) % 86400
@@ -678,11 +682,11 @@ def loop_comments(num):
 
 
 if __name__ == '__main__':
-    # is_zero()
+    # wait_zero()  # 等待零点执行
     get_mid_page = 5  # 一次爬微博页数
-    get_mid_max = 10  # 爬取失败时最多爬取的页数
+    get_mid_max = 100  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
-    loop_comments_num = 10  # 运行次数
+    loop_comments_num = 20  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
     # 微信推送 http://sc.ftqq.com
@@ -691,7 +695,7 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
     # 需要发送的群聊的id
     gid_list = [
-    
+
     ]
     # 默认评论内容
     default_content = 'https://m.weibo.cn/detail/{mid}'
