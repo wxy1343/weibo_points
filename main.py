@@ -5,13 +5,13 @@ import sys
 import requests
 import re
 import time
-from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing.dummy import Pool
 from threading import Lock
 from bs4 import BeautifulSoup
 from config import Config
 
 lock = Lock()
-pool = ThreadPool(100)
+pool = Pool(100)
 is_frequent = False
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0'}
 cf = Config('config.ini', '配置')
