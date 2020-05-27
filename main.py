@@ -444,7 +444,7 @@ def group_chat_comments(gid):
 
 def vip_sign(gsid):
     """
-    每日vip签到成长值
+    每日vip签到成长值+1
     :param gsid:
     :return:
     """
@@ -464,7 +464,7 @@ def vip_sign(gsid):
 
 def vip_pk(gsid):
     """
-    每日vip pk任务
+    每日vip pk成长值+1
     :param gsid:
     :return:
     """
@@ -526,6 +526,17 @@ def vip_pk(gsid):
     url = f'https://new.vip.weibo.cn/aj/pklog'
     data = {'duid': action, 'flag': flag, 'F': ''}
     r = req.post(url, headers=headers, cookies=cookies, data=data)
+    print(r.json()['msg'])
+
+
+def vip_task_complete(gsid):
+    """
+    vip完成今日所有任务,成长值+2
+    :return:
+    """
+    url = 'https://new.vip.weibo.cn/aj/task/addscore'
+    cookies = {'SUB': gsid}
+    r = requests.get(url, cookies=cookies)
     print(r.json()['msg'])
 
 
@@ -682,7 +693,7 @@ def loop_comments(num):
 
 
 if __name__ == '__main__':
-    # wait_zero()  # 等待零点执行
+    wait_zero()  # 等待零点执行
     get_mid_page = 5  # 一次爬微博页数
     get_mid_max = 100  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
@@ -725,21 +736,24 @@ if __name__ == '__main__':
             exit()
         else:
             print('创建成功')
-            # 发送微博到群聊
+            # 发送微博到群组
             for gid in gid_list:
                 group_chat_comments(gid)
         print('*' * 100)
-        print('开始：vip签到')
+        print('获取每日vip签到成长值')
         vip_sign(gsid)
         print('*' * 100)
-        print('开始：vip pk')
+        print('获取vip pk成长值')
         vip_pk(gsid)
         print('*' * 100)
-        print('开始：超话登录积分')
+        print('获取超话登录积分')
         login_integral(gsid)
         print('*' * 100)
-        print('开始：每日签到积分')
+        print('获取每日签到积分')
         sign_integral(gsid)
+        print('*' * 100)
+        print('获取完成所有vip任务成长值')
+        vip_task_complete(gsid)
         print('*' * 100)
     print('https://m.weibo.cn/detail/' + my_mid)
     loop_comments(loop_comments_num)
