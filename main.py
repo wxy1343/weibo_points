@@ -100,10 +100,6 @@ def comment(args):
                 return
         except:
             pass
-    if f'"id": {uid}' in r.text:
-        print('已跳过评论自己的微博：' + detail_url)
-        mid_write_file(mid)
-        return
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     url = 'https://m.weibo.cn/api/comments/create'
@@ -707,9 +703,10 @@ def start_comments():
     except:
         is_frequent = True
     print('评论成功数：' + str(com_suc_num))
+    print('总评论数：' + str(get_mid_num()))
     push_wechat('weibo_comments', f'''
                 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                评论成功数：{com_suc_num}''')
+                评论成功数：{com_suc_num}  总评论数：{get_mid_num()}''')
 
 
 def loop_comments(num):
