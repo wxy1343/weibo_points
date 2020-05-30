@@ -30,7 +30,7 @@ def create_weibo(text, cid):
         cf.Add('配置', 'time', str(time.time()))
 
     def retry():
-        for info in get_latest_mid_info(gsid):
+        for info in get_mid_info(gsid):
             mid = info['mid']
             title = info['title']
             t = info['t']
@@ -317,7 +317,7 @@ def get_my_mid():
     """
     mid = cf.GetStr('配置', 'mid')
     if mid == '':
-        for info in get_latest_mid_info(gsid):
+        for info in get_mid_info(gsid):
             mid = info['mid']
             title = info['title']
             t = info['t']
