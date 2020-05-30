@@ -30,13 +30,13 @@ def create_weibo(text, cid):
         cf.Add('配置', 'time', str(time.time()))
 
     def retry():
-        info = get_latest_mid_info(gsid)
-        mid = info['mid']
-        title = info['title']
-        t = info['t']
-        if title == weibo_title and is_today(t):
-            add_config()
-            return mid
+        for info in get_latest_mid_info(gsid):
+            mid = info['mid']
+            title = info['title']
+            t = info['t']
+            if title == weibo_title and is_today(t):
+                add_config()
+                return mid
         else:
             print('创建微博失败,正在重试')
             time.sleep(0.1)
@@ -213,7 +213,7 @@ def get_mid_num():
     return count
 
 
-def get_latest_mid_info(gsid):
+def get_mid_info(gsid):
     cookies = {'SUB': gsid}
     uid = get_uid(gsid)
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
@@ -222,17 +222,15 @@ def get_latest_mid_info(gsid):
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
         logging.warning(str(r.status_code) + ':' + r.text)
-    t_max = 0
-    t_index = 0
+    info = []
     for i, j in enumerate(r.json()['data']['statuses']):
         t = j['created_at']
         t = time.mktime(time.strptime(' '.join(t.split()[:4] + t.split()[-1:]), '%c'))
-        if t > t_max:
-            t_max = t
-            t_index = i
-    mid = r.json()['data']['statuses'][t_index]['mid']
-    title = r.json()['data']['statuses'][t_index]['raw_text'][:-2]
-    return {'title': title, 'mid': mid, 't': t_max}
+        mid = r.json()['data']['statuses'][i]['mid']
+        title = r.json()['data']['statuses'][i]['raw_text'][:-2]
+        info.append({'t': t, 'mid': mid, 'title': title})
+    info.sort(key=lambda keys: keys['t'], reverse=True)
+    return info
 
 
 def get_mid(cid, page=1):
@@ -319,13 +317,13 @@ def get_my_mid():
     """
     mid = cf.GetStr('配置', 'mid')
     if mid == '':
-        info = get_latest_mid_info(gsid)
-        mid = info['mid']
-        title = info['title']
-        t = info['t']
-        if title == weibo_title and is_today(t):
-            cf.Add('配置', 'mid', mid)
-            return mid
+        for info in get_latest_mid_info(gsid):
+            mid = info['mid']
+            title = info['title']
+            t = info['t']
+            if title == weibo_title and is_today(t):
+                cf.Add('配置', 'mid', mid)
+                return mid
         return False
     return mid
 
