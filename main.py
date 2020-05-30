@@ -24,6 +24,25 @@ def create_weibo(text, cid):
     :param cid: 超话id
     :return:
     """
+
+    def add_config():
+        cf.Add('配置', 'mid', mid)
+        cf.Add('配置', 'time', str(time.time()))
+
+    def retry():
+        info = get_latest_mid_info(gsid)
+        mid = info['mid']
+        title = info['title']
+        t = info['t']
+        if title == weibo_title and is_today(t):
+            add_config()
+            return mid
+        else:
+            print('创建微博失败,正在重试')
+            time.sleep(0.1)
+            mid = create_weibo(text, cid)
+            return mid
+
     headers = {'Referer': 'https://weibo.com'}
     cookies = {'SUB': gsid}
     data = {
@@ -37,11 +56,13 @@ def create_weibo(text, cid):
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
         logging.warning(str(r.status_code) + ':' + r.text)
+        return retry()
     if r.json()['code'] == '100000':
         mid = r.json()['data']['mid']
-        cf.Add('配置', 'mid', mid)
-        cf.Add('配置', 'time', str(time.time()))
+        add_config()
         return mid
+    elif r.json()['code'] == '20019':
+        return retry()
     else:
         print(r.json()['msg'])
         return False
@@ -75,6 +96,7 @@ def comment(args):
             elif r.status_code == 418:
                 time.sleep(0.5)
             elif r.status_code == 403:
+                print('评论失败：' + detail_url)
                 return
         except:
             pass
@@ -195,6 +217,28 @@ def get_mid_num():
     return count
 
 
+def get_latest_mid_info(gsid):
+    cookies = {'SUB': gsid}
+    uid = get_uid(gsid)
+    url = f'https://m.weibo.cn/profile/info?uid={uid}'
+    r = requests.get(url, cookies=cookies)
+    try:
+        logging.info(str(r.status_code) + ':' + str(r.json()))
+    except:
+        logging.warning(str(r.status_code) + ':' + r.text)
+    t_max = 0
+    t_index = 0
+    for i, j in enumerate(r.json()['data']['statuses']):
+        t = j['created_at']
+        t = time.mktime(time.strptime(' '.join(t.split()[:4] + t.split()[-1:]), '%c'))
+        if t > t_max:
+            t_max = t
+            t_index = i
+    mid = r.json()['data']['statuses'][t_index]['mid']
+    title = r.json()['data']['statuses'][t_index]['raw_text'][:-2]
+    return {'title': title, 'mid': mid, 't': t_max}
+
+
 def get_mid(cid, page=1):
     """
     获取帖子
@@ -279,6 +323,13 @@ def get_my_mid():
     """
     mid = cf.GetStr('配置', 'mid')
     if mid == '':
+        info = get_latest_mid_info(gsid)
+        mid = info['mid']
+        title = info['title']
+        t = info['t']
+        if title == weibo_title and is_today(t):
+            cf.Add('配置', 'mid', mid)
+            return mid
         return False
     return mid
 
@@ -296,12 +347,13 @@ def get_gsid():
     return gsid
 
 
-def is_today():
+def is_today(t=None):
     """
     获取配置中的信息的时间
     :return: bool
     """
-    t = cf.GetFloat('配置', 'time')
+    if t is None:
+        t = cf.GetFloat('配置', 'time')
     zero_time = int(time.time()) - int(time.time() - time.timezone) % 86400
     if t != None and t >= zero_time:
         return True
@@ -693,8 +745,8 @@ def loop_comments(num):
 
 
 if __name__ == '__main__':
-    wait_zero()  # 等待零点执行
-    get_mid_page = 5  # 一次爬微博页数
+    # wait_zero()  # 等待零点执行
+    get_mid_page = 5  # 一次dd爬微博页数
     get_mid_max = 100  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
@@ -704,6 +756,8 @@ if __name__ == '__main__':
     SCKEY = ''
     # 评论的超话
     st_name = '橘子工厂'
+    # 发送微博的标题
+    weibo_title = f'#{st_name}[超话]#积分！'
     # 需要发送的群聊的id
     gid_list = [
 
@@ -730,7 +784,7 @@ if __name__ == '__main__':
         clear_log()
         clear_mid_file()
         print('正在创建微博')
-        my_mid = create_weibo(f'#{st_name}[超话]#积分！', cid)
+        my_mid = create_weibo(weibo_title, cid)
         if my_mid == False:
             print('创建失败')
             exit()
