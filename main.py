@@ -33,8 +33,7 @@ def create_weibo(text, cid):
         for info in get_weibo_info(gsid):
             mid = info['mid']
             title = info['title']
-            t = info['t']
-            if title == weibo_title and is_today(t):
+            if title == weibo_title:
                 add_config()
                 return mid
         else:
@@ -207,7 +206,7 @@ def clear_log():
 def get_mid_num():
     """
     获取已经评论的mid的数量
-    :return: 
+    :return:
     """
     count = 0
     with open('mid.txt', 'r') as f:
@@ -220,8 +219,8 @@ def get_mid_num():
 def get_weibo_info(gsid):
     """
     获取已发微博的信息
-    :param gsid: 
-    :return: 
+    :param gsid:
+    :return:
     """
     cookies = {'SUB': gsid}
     uid = get_uid(gsid)
@@ -329,8 +328,7 @@ def get_my_mid():
         for info in get_weibo_info(gsid):
             mid = info['mid']
             title = info['title']
-            t = info['t']
-            if title == weibo_title and is_today(t):
+            if title == weibo_title:
                 cf.Add('配置', 'mid', mid)
                 return mid
         return False
@@ -688,8 +686,8 @@ def login_integral(gsid):
 def init_log(level):
     """
     初始化log
-    :param level: 
-    :return: 
+    :param level:
+    :return:
     """
     LOG_FORMAT = "%(asctime)s - %(levelname)s - %(pathname)s->%(funcName)s line %(lineno)d : %(message)s"
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
@@ -700,7 +698,7 @@ def init_log(level):
 def start_comments():
     """
     开始评论
-    :return: 
+    :return:
     """
     global com_suc_num
     global is_frequent
@@ -728,8 +726,8 @@ def start_comments():
 def loop_comments(num):
     """
     循环评论
-    :param num: 
-    :return: 
+    :param num:
+    :return:
     """
     global uid
     global is_frequent
@@ -778,7 +776,7 @@ if __name__ == '__main__':
     weibo_title = f'#{st_name}[超话]#积分！'
     # 需要发送的群聊的id
     gid_list = [
-        
+
     ]
     # 默认评论内容
     default_content = 'https://m.weibo.cn/detail/{mid}'
