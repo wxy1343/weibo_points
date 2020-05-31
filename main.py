@@ -762,7 +762,7 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
-    get_mid_page = 5  # 一次dd爬微博页数
+    get_mid_page = 5  # 一次爬微博页数
     get_mid_max = 100  # 爬取失败时最多爬取的页数
     comment_max = 1000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
