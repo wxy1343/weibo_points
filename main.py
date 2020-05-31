@@ -30,7 +30,7 @@ def create_weibo(text, cid):
         cf.Add('配置', 'time', str(time.time()))
 
     def retry():
-        for info in get_mid_info(gsid):
+        for info in get_weibo_info(gsid):
             mid = info['mid']
             title = info['title']
             t = info['t']
@@ -205,6 +205,10 @@ def clear_log():
 
 
 def get_mid_num():
+    """
+    获取已经评论的mid的数量
+    :return: 
+    """
     count = 0
     with open('mid.txt', 'r') as f:
         for i in f.read().split('\n'):
@@ -213,7 +217,12 @@ def get_mid_num():
     return count
 
 
-def get_mid_info(gsid):
+def get_weibo_info(gsid):
+    """
+    获取已发微博的信息
+    :param gsid: 
+    :return: 
+    """
     cookies = {'SUB': gsid}
     uid = get_uid(gsid)
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
@@ -317,7 +326,7 @@ def get_my_mid():
     """
     mid = cf.GetStr('配置', 'mid')
     if mid == '':
-        for info in get_mid_info(gsid):
+        for info in get_weibo_info(gsid):
             mid = info['mid']
             title = info['title']
             t = info['t']
@@ -677,6 +686,11 @@ def login_integral(gsid):
 
 
 def init_log(level):
+    """
+    初始化log
+    :param level: 
+    :return: 
+    """
     LOG_FORMAT = "%(asctime)s - %(levelname)s - %(pathname)s->%(funcName)s line %(lineno)d : %(message)s"
     DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
     logging.basicConfig(handlers=[logging.FileHandler('weibo.log', 'a', 'utf-8')], level=level, format=LOG_FORMAT,
@@ -684,6 +698,10 @@ def init_log(level):
 
 
 def start_comments():
+    """
+    开始评论
+    :return: 
+    """
     global com_suc_num
     global is_frequent
     mid_list = get_mid(cid, get_mid_page)
@@ -708,6 +726,11 @@ def start_comments():
 
 
 def loop_comments(num):
+    """
+    循环评论
+    :param num: 
+    :return: 
+    """
     global uid
     global is_frequent
     for i in range(num):
@@ -755,7 +778,7 @@ if __name__ == '__main__':
     weibo_title = f'#{st_name}[超话]#积分！'
     # 需要发送的群聊的id
     gid_list = [
-
+        
     ]
     # 默认评论内容
     default_content = 'https://m.weibo.cn/detail/{mid}'
