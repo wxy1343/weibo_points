@@ -88,7 +88,7 @@ def comment(args):
     cookies = {'SUB': gsid}
     while True:
         try:
-            r = requests.get(detail_url, cookies=cookies, timeout=2)
+            r = requests.get(detail_url, cookies=cookies)
             r.encoding = 'utf-8'
             logging.info(str(r.status_code))
             if r.status_code == 200:
@@ -104,7 +104,7 @@ def comment(args):
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     url = 'https://m.weibo.cn/api/comments/create'
-    data = {'content': content, 'mid': mid, 'st': st}
+    data = {'content': time.strftime(content, time.localtime()), 'mid': mid, 'st': st}
     while True:
         try:
             r = requests.post(url, data=data, cookies=cookies, timeout=1)
@@ -264,11 +264,12 @@ def get_mid(cid, page=1):
     def analysis_and_join_list(mblog):
         t = mblog['created_at']
         mid = mblog['mid']
+        text = mblog['text']
         user_id = str(mblog['user']['id'])
         if not after_zero(t):
             return
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
-            mid_list.append((mid, user_id))
+            mid_list.append((mid, user_id, text))
             screen_name = mblog['user']['screen_name']
             print(screen_name.strip().replace('\n', ''), t, mid, user_id)
             return True
@@ -715,12 +716,14 @@ def start_comments():
     global is_frequent
     mid_list = get_mid(cid, get_mid_page)
     mid_lists = []
-    for mid, user_id in mid_list:
+    for mid, user_id, text in mid_list:
+        content = default_content
+        for key in keywords_comment.keys():
+            if key in text:
+                content = keywords_comment[key]
         if user_id in custom_comments.keys():
-            content = custom_comments[user_id].format(mid=my_mid)
-        else:
-            content = default_content.format(mid=my_mid)
-        mid_lists.append((mid, content))
+            content = custom_comments[user_id]
+        mid_lists.append((mid, content.format(mid=my_mid)))
     com_suc_num = 0
     print('开始评论')
     try:
@@ -773,7 +776,7 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
-    get_mid_page = 5  # 一次爬微博页数
+    get_mid_page = 1  # 一次爬微博页数
     get_mid_max = 100  # 爬取失败时最多爬取的页数
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
@@ -791,9 +794,13 @@ if __name__ == '__main__':
     ]
     # 默认评论内容
     default_content = 'https://m.weibo.cn/detail/{mid}'
-    # 自定义评论内容
+    # 自定义用户评论内容
     custom_comments = {
         # uid:评论内容
+    }
+    # 微博关键字自定义评论
+    keywords_comment = {
+        # 关键字:评论内容
     }
     init_log(logging.INFO)
     gsid = get_gsid()
