@@ -78,8 +78,9 @@ def comment(args):
     mid, content = args
     detail_url = 'https://m.weibo.cn/detail/' + mid
     if get_mid_num() >= comment_max:
-        print(f'你已经评论{comment_max}条了')
-        exit()
+        with lock:
+            print(f'你已经评论{comment_max}条了')
+            exit()
     if mid_in_file(mid):
         with lock:
             print('你已经评论：' + detail_url)
@@ -95,7 +96,8 @@ def comment(args):
             elif r.status_code == 418:
                 time.sleep(0.5)
             elif r.status_code == 403:
-                print('评论失败：' + detail_url)
+                with lock:
+                    print('评论失败：' + detail_url)
                 return
         except:
             pass
@@ -126,19 +128,28 @@ def comment(args):
                 print('评论失败：' + detail_url)
                 if r.json()['ok'] == 0:
                     print(r.json()['msg'])
+                    errno = r.json()['errno']
                     # 频繁
-                    if r.json()['errno'] == '100005':
+                    if errno == '100005':
                         is_frequent = True
                     # 已经评论
-                    elif r.json()['errno'] == '20019':
+                    elif errno == '20019':
                         mid_write_file(mid)
                     # 只允许粉丝评论
-                    elif r.json()['errno'] == '20210':
-                        pass
+                    elif errno == '20210':
+                        mid_write_file(mid)
                     # 发微博太多
-                    elif r.json()['errno'] == '20016':
-                        pass
+                    elif errno == '20016':
+                        exit()
+                    # 异常
+                    elif errno == '200002':
+                        exit()
+
             return
+    except SystemExit:
+        import os
+        # 退出进程
+        os._exit(int(errno))
     except:
         with lock:
             print('评论失败：' + detail_url)
@@ -764,7 +775,7 @@ if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
     get_mid_page = 5  # 一次爬微博页数
     get_mid_max = 100  # 爬取失败时最多爬取的页数
-    comment_max = 1000  # 最多评论次数
+    comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
