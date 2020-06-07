@@ -104,7 +104,7 @@ def comment(args):
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     url = 'https://m.weibo.cn/api/comments/create'
-    data = {'content': time.strftime(content, time.localtime()), 'mid': mid, 'st': st}
+    data = {'content': content, 'mid': mid, 'st': st}
     while True:
         try:
             r = requests.post(url, data=data, cookies=cookies, timeout=1)
@@ -794,7 +794,7 @@ if __name__ == '__main__':
     ]
     # 默认评论内容
     default_content = 'https://m.weibo.cn/detail/{mid}'
-    # 自定义用户评论内容
+    # 自定义评论内容
     custom_comments = {
         # uid:评论内容
     }
