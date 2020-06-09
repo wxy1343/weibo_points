@@ -739,8 +739,8 @@ def start_comments():
         for key in keywords_comment.keys():
             if key in text:
                 content = gen.send(keywords_comment[key])
-        if user_id in custom_comments.keys():
-            content = gen.send(custom_comments[user_id])
+        if user_id in user_comments.keys():
+            content = gen.send(user_comments[user_id])
         mid_lists.append((mid, content.format(mid=my_mid)))
     com_suc_num = 0
     print('开始评论')
@@ -823,7 +823,7 @@ if __name__ == '__main__':
     # 构造生成器：生成器 = random_gen(随机列表)
     # 需要赋值才能生效
     # 例：default_content = random_comment
-    # 例：custom_comments = {'xxx': random_comment}
+    # 例：user_comments = {'xxx': random_comment}
     random_comment = random_gen([
         mid_link
     ])
@@ -831,12 +831,12 @@ if __name__ == '__main__':
     # 默认评论内容
     default_content = random_comment
 
-    # 自定义评论内容
-    custom_comments = {
-        # uid:评论内容
+    # 自定义用户评论
+    user_comments = {
+        # 用户id:评论内容
     }
 
-    # 微博关键字自定义评论
+    # 自定义关键字评论
     keywords_comment = {
         # 关键字:评论内容
         # '异常': 'xxx',
