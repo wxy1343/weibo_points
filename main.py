@@ -50,7 +50,6 @@ def create_weibo(text, cid):
         'topic_id': f'1022:{cid}'}
     url = 'https://weibo.com/p/aj/proxy?ajwvr=6'
     r = requests.post(url, data=data, cookies=cookies, headers=headers)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -89,7 +88,6 @@ def comment(args):
     while True:
         try:
             r = requests.get(detail_url, cookies=cookies)
-            r.encoding = 'utf-8'
             logging.info(str(r.status_code))
             if r.status_code == 200:
                 break
@@ -108,7 +106,6 @@ def comment(args):
     while True:
         try:
             r = requests.post(url, data=data, cookies=cookies, timeout=1)
-            r.encoding = 'utf-8'
             try:
                 logging.info(str(r.status_code) + ':' + str(r.json()))
             except:
@@ -144,6 +141,9 @@ def comment(args):
                     # 异常
                     elif errno == '200002':
                         exit()
+                    # 服务器走丢了
+                    elif errno == '100001':
+                        pass
 
             return
     except SystemExit:
@@ -297,7 +297,6 @@ def get_mid(cid, page=1):
         while True:
             try:
                 r = req.get(url, timeout=2)
-                r.encoding = 'utf-8'
                 logging.info(str(r.status_code))
                 if r.status_code == 200 and r.json()['ok'] == 1:
                     break
@@ -403,7 +402,6 @@ def get_uid(gsid):
     url = 'https://m.weibo.cn/api/config'
     while True:
         r = req.get(url, cookies=cookies)
-        r.encoding = 'utf-8'
         try:
             logging.info(str(r.status_code) + ':' + str(r.json()))
         except:
@@ -440,7 +438,6 @@ def find_super_topic(name):
     """
     url = 'https://m.weibo.cn/api/container/getIndex?containerid=100103type=1%26q=' + name
     r = requests.get(url)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -457,7 +454,6 @@ def get_bid(mid):
     """
     url = 'https://m.weibo.cn/detail/' + mid
     r = requests.get(url)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -484,7 +480,6 @@ def group_chat_comments(gid):
     # 获取st,群信息
     url = 'https://m.weibo.cn/api/groupchat/list?gid=' + gid
     r = requests.get(url, cookies=cookies, headers=headers)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -519,7 +514,6 @@ def vip_sign(gsid):
         'Referer': 'https://new.vip.weibo.cn'}
     req = requests.Session()
     r = req.get(url, headers=headers, cookies=cookies)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -541,7 +535,6 @@ def vip_pk(gsid):
 
     # 获取pk对象
     r = req.get(url, headers=headers, cookies=cookies)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -621,7 +614,6 @@ def sign_integral(gsid):
     cookies = {'SUB': gsid}
     data = {'type': 'REQUEST', 'user_score': 999}
     r = requests.post(url, headers=headers, data=data, cookies=cookies)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -641,7 +633,6 @@ def push_wechat(text, desp):
     data = {'text': text, 'desp': desp}
     try:
         r = requests.post(f'https://sc.ftqq.com/{SCKEY}.send', data=data)
-        r.encoding = 'utf-8'
         try:
             logging.info(str(r.status_code) + ':' + str(r.json()))
         except:
@@ -685,7 +676,6 @@ def login_integral(gsid):
     st = get_st(parmas, gsid)
     headers = {'gsid': gsid, 'st': st}
     r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=headers)
-    r.encoding = 'utf-8'
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -707,6 +697,34 @@ def init_log(level):
                         datefmt=DATE_FORMAT)
 
 
+def random_gen(random_list):
+    """
+    随机生成器
+    :param random_list:
+    :return:
+    """
+    while True:
+        yield str(random.choice(random_list))
+
+
+def comment_gen():
+    """
+    评论生成器
+    :return:
+    """
+    import types
+    commnet_obj = None
+    while True:
+        if type(commnet_obj) is types.GeneratorType:
+            commnet_obj = yield next(commnet_obj)
+        else:
+            commnet_obj = yield commnet_obj
+
+
+gen = comment_gen()
+next(gen)
+
+
 def start_comments():
     """
     开始评论
@@ -717,12 +735,12 @@ def start_comments():
     mid_list = get_mid(cid, get_mid_page)
     mid_lists = []
     for mid, user_id, text in mid_list:
-        content = default_content
+        content = gen.send(default_content)
         for key in keywords_comment.keys():
             if key in text:
-                content = keywords_comment[key]
+                content = gen.send(keywords_comment[key])
         if user_id in custom_comments.keys():
-            content = custom_comments[user_id]
+            content = gen.send(custom_comments[user_id])
         mid_lists.append((mid, content.format(mid=my_mid)))
     com_suc_num = 0
     print('开始评论')
@@ -782,26 +800,49 @@ if __name__ == '__main__':
     loop_comments_num = 20  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
+
     # 微信推送 http://sc.ftqq.com
     SCKEY = ''
+
     # 评论的超话
     st_name = '橘子工厂'
+
     # 发送微博的标题
     weibo_title = f'#{st_name}[超话]#积分！'
+
     # 需要发送的群聊的id
     gid_list = [
 
     ]
+
+    # 微博链接
+    # {mid}会自动替换
+    mid_link = 'https://m.weibo.cn/detail/{mid}'
+
+    # 随机评论
+    # 构造生成器：生成器 = random_gen(随机列表)
+    # 需要赋值才能生效
+    # 例：default_content = random_comment
+    # 例：custom_comments = {'xxx': random_comment}
+    random_comment = random_gen([
+        mid_link
+    ])
+
     # 默认评论内容
-    default_content = 'https://m.weibo.cn/detail/{mid}'
+    default_content = random_comment
+
     # 自定义评论内容
     custom_comments = {
         # uid:评论内容
     }
+
     # 微博关键字自定义评论
     keywords_comment = {
         # 关键字:评论内容
+        # '异常': 'xxx',
+        # '勿带链接': 'xxx'
     }
+
     init_log(logging.INFO)
     gsid = get_gsid()
     uid = get_uid(gsid)
@@ -818,7 +859,7 @@ if __name__ == '__main__':
         clear_log()
         clear_mid_file()
         print('正在创建微博')
-        my_mid = create_weibo(weibo_title, cid)
+        my_mid = create_weibo(gen.send(weibo_title), cid)
         if my_mid == False:
             print('创建失败')
             exit()
