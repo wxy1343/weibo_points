@@ -441,7 +441,7 @@ def find_super_topic(name):
     """
     url = 'https://m.weibo.cn/api/container/getIndex?containerid=100103type=1%26q=' + name
     r = requests.get(url)
-    logging.warning(str(r.status_code))
+    logging.info(str(r.status_code))
     return re.findall('100808[\d\w]{32}', r.text)[0]
 
 
