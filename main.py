@@ -595,7 +595,10 @@ def vip_task_complete(gsid):
     url = 'https://new.vip.weibo.cn/aj/task/addscore'
     cookies = {'SUB': gsid}
     r = requests.get(url, cookies=cookies)
-    print(r.json()['msg'])
+    try:
+        print(r.json()['msg'])
+    except:
+        pass
 
 
 def sign_integral(gsid):
