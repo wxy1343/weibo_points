@@ -743,7 +743,7 @@ def start_comments():
                 content = gen.send(keywords_comment[key])
         if user_id in user_comments.keys():
             content = gen.send(user_comments[user_id])
-        mid_lists.append((mid, content.format(mid=my_mid, name=name)))
+        mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
     print('开始评论')
     try:
@@ -820,12 +820,13 @@ if __name__ == '__main__':
 
     # 微博链接
     # {mid}会自动替换
-    mid_link = 'https://m.weibo.cn/detail/{mid}'
+    mid_link = 'https://m.weibo.cn/{uid}/{mid}'
 
     # 随机评论列表
     random_list = [
         '@{name} ' + mid_link
     ]
+
     # 随机评论
     # 构造生成器：生成器 = random_gen(随机列表)
     # 需要赋值才能生效
