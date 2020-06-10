@@ -269,8 +269,8 @@ def get_mid(cid, page=1):
         if not after_zero(t):
             return
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
-            mid_list.append((mid, user_id, text))
             screen_name = mblog['user']['screen_name']
+            mid_list.append((mid, user_id, text, screen_name))
             print(screen_name.strip().replace('\n', ''), t, mid, user_id)
             return True
         else:
@@ -303,7 +303,7 @@ def get_mid(cid, page=1):
                 # 反爬
                 elif r.status_code == 418:
                     is_frequent = True
-                    return mid_list
+                    return mid_list[:get_mid_max]
                 elif r.status_code == 502:
                     time.sleep(0.5)
             except:
@@ -315,18 +315,20 @@ def get_mid(cid, page=1):
                 card_page = 1
                 mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
                 if analysis_and_join_list(mblog) is None:
-                    return mid_list
+                    return mid_list[:get_mid_max]
             for j in r.json()['data']['cards'][card_page]['card_group']:
                 mblog = j['mblog']
                 if analysis_and_join_list(mblog) is None:
-                    return mid_list
+                    return mid_list[:get_mid_max]
         since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
         if length < len(mid_list):
             i += 1
         p += 1
-        if p >= get_mid_max:
+        if p >= get_page_max:
             break
-    return mid_list
+        if len(mid_list) >= get_mid_max:
+            break
+    return mid_list[:get_mid_max]
 
 
 def get_my_mid():
@@ -734,14 +736,14 @@ def start_comments():
     global is_frequent
     mid_list = get_mid(cid, get_mid_page)
     mid_lists = []
-    for mid, user_id, text in mid_list:
+    for mid, user_id, text, name in mid_list:
         content = gen.send(default_content)
         for key in keywords_comment.keys():
             if key in text:
                 content = gen.send(keywords_comment[key])
         if user_id in user_comments.keys():
             content = gen.send(user_comments[user_id])
-        mid_lists.append((mid, content.format(mid=my_mid)))
+        mid_lists.append((mid, content.format(mid=my_mid, name=name)))
     com_suc_num = 0
     print('开始评论')
     try:
@@ -794,8 +796,9 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
-    get_mid_page = 5  # 一次爬微博页数
-    get_mid_max = 100  # 爬取失败时最多爬取的页数
+    get_mid_page = 100  # 一次爬微博页数
+    get_page_max = 100  # 爬取失败时最多爬取的页数
+    get_mid_max = 60  # 一次最多评论微博数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
@@ -819,14 +822,16 @@ if __name__ == '__main__':
     # {mid}会自动替换
     mid_link = 'https://m.weibo.cn/detail/{mid}'
 
+    # 随机评论列表
+    random_list = [
+        '@{name} ' + mid_link
+    ]
     # 随机评论
     # 构造生成器：生成器 = random_gen(随机列表)
     # 需要赋值才能生效
     # 例：default_content = random_comment
     # 例：user_comments = {'xxx': random_comment}
-    random_comment = random_gen([
-        mid_link
-    ])
+    random_comment = random_gen(random_list)
 
     # 默认评论内容
     default_content = random_comment
