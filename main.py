@@ -220,6 +220,7 @@ def get_mid_num():
     :return:
     """
     count = 0
+    open('mid.txt', 'a').close()
     with open('mid.txt', 'r') as f:
         for i in f.read().split('\n'):
             if i != '':
