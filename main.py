@@ -819,7 +819,7 @@ if __name__ == '__main__':
     ]
 
     # 微博链接
-    # {mid}会自动替换
+    # {uid}和{mid}会自动替换
     mid_link = 'https://m.weibo.cn/{uid}/{mid}'
 
     # 随机评论列表
