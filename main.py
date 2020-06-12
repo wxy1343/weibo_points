@@ -771,7 +771,6 @@ def start_comments():
                 break
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
-    exit()
     print('开始评论')
     try:
         pool.map(comment, mid_lists)
@@ -822,7 +821,7 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
-    comment_following = True  # 是否只评论已关注的
+    comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
     get_mid_page = 200  # 一次爬微博页数
     get_page_max = 200  # 爬取失败时最多爬取的页数
