@@ -277,12 +277,10 @@ def get_mid(cid, page=1):
         follow_me = mblog['user']['follow_me']
         if not after_zero(t):
             return
-        if comment_following:
-            if not following:
-                return False
-        if comment_follow_me:
-            if not follow_me:
-                return False
+        if comment_following and not following:
+            return False
+        if comment_follow_me and follow_me:
+            return False
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
             screen_name = mblog['user']['screen_name']
             mid_list.append((mid, user_id, text, screen_name))
@@ -798,7 +796,6 @@ def loop_comments(num):
         get_uid(gsid)
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
-            exit()
         if is_frequent:
             n = frequent_wait_time
             push_wechat('weibo_comments', f'''
@@ -832,7 +829,7 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
-    comments_wait_time = 1  # 每次延迟运行时间
+    comments_wait_time = 10  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
