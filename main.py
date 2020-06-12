@@ -2,6 +2,7 @@ import hashlib
 import logging
 import random
 import sys
+import traceback
 import requests
 import re
 import time
@@ -328,18 +329,23 @@ def get_mid(cid, page=1):
             except:
                 pass
         card_page = 0
-        if p + 1 >= start_page:
-            # 判断是否是第一页
-            if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
-                card_page = 1
-                mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
-                if analysis_and_join_list(mblog) is None:
-                    return mid_list[:get_mid_max_r]
-            for j in r.json()['data']['cards'][card_page]['card_group']:
-                mblog = j['mblog']
-                if analysis_and_join_list(mblog) is None:
-                    return mid_list[:get_mid_max_r]
-        since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
+        try:
+            if p + 1 >= start_page:
+                # 判断是否是第一页
+                if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
+                    card_page = 1
+                    mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
+                    if analysis_and_join_list(mblog) is None:
+                        return mid_list[:get_mid_max_r]
+                for j in r.json()['data']['cards'][card_page]['card_group']:
+                    mblog = j['mblog']
+                    if analysis_and_join_list(mblog) is None:
+                        return mid_list[:get_mid_max_r]
+            since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
+        except:
+            logging.error(r.json())
+            traceback.print_exc()
+            return mid_list[:get_mid_max_r]
         if length < len(mid_list):
             i += 1
         p += 1
