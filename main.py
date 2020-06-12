@@ -303,9 +303,9 @@ def get_mid(cid, page=1):
     req.headers = headers
     i = 0  # 爬取成功页数
     p = 0  # 已爬取页数
+    get_mid_max_r = gen.send(get_mid_max)
     while i < page:
         length = len(mid_list)
-        get_mid_max_r = gen.send(get_mid_max)
         with lock:
             print('*' * 100)
             print('第%d页' % (p + 1))
