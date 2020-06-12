@@ -282,7 +282,7 @@ def get_mid(cid, page=1):
             if not follow_me:
                 return False
         if not after_zero(t):
-            return False
+            return
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
             screen_name = mblog['user']['screen_name']
             mid_list.append((mid, user_id, text, screen_name))
