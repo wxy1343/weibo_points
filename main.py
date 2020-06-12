@@ -170,14 +170,8 @@ def after_zero(t):
     :param t:
     :return:
     """
-    if t == '刚刚':
+    if t >= int(time.time()) - int(time.time() - time.timezone) % 86400:
         return True
-    elif re.match('^(\d{1,2})分钟前$', t):
-        if int(t[:-3]) * 60 < int(time.time() - time.timezone) % 86400:
-            return True
-    elif re.match('^(\d{1,2})小时前$', t):
-        if int(t[:-3]) * 3600 < int(time.time() - time.timezone) % 86400:
-            return True
     return False
 
 
@@ -193,15 +187,43 @@ def mid_write_file(mid):
                 f1.write(mid + '\n')
 
 
+def in_file(file_name, text):
+    """
+    判断文本是否在文件里
+    :param file_name:
+    :param text:
+    :return:
+    """
+    open(file_name, 'a').close()
+    with open(file_name, 'r') as f:
+        return text in f.read()
+
+
 def mid_in_file(mid):
     """
     判断mid是否已经评论
     :param mid:
     :return:
     """
-    open('mid.txt', 'a').close()  # 防止不存在时报错
-    with open('mid.txt', 'r') as f:
-        return mid in f.read()
+    return in_file('mid.txt', mid)
+
+
+def following_in_file(uid):
+    """
+    用户是否在关注列表里
+    :param uid:
+    :return:
+    """
+    return in_file('following.txt', uid)
+
+
+def fans_in_file(uid):
+    """
+    用户是否在粉丝列表里
+    :param uid:
+    :return:
+    """
+    return in_file('fans.txt', uid)
 
 
 def clear_mid_file():
@@ -259,6 +281,89 @@ def get_weibo_info(gsid):
     return info
 
 
+def wait_time(n):
+    """
+    等待n秒
+    :param n:
+    :return:
+    """
+    while n + 1:
+        time.sleep(1)
+        sys.stdout.write(f'\r等待时间：{n}秒')
+        n -= 1
+
+
+def get_follow():
+    def get_following_list():
+        following_list = []
+        page = 1
+        cookies = {'SUB': gsid}
+        while True:
+            url = f'https://m.weibo.cn/api/container/getIndex?containerid=231093_-_selffollowed&page={page}'
+            while True:
+                try:
+                    r = requests.get(url, cookies=cookies)
+                    if r.status_code == 418:
+                        raise
+                    r.json()
+                    break
+                except:
+                    wait_time(120)
+            if r.json()['ok'] == 0:
+                break
+            card_page = 0
+            if len(r.json()['data']['cards']) == 2:
+                card_page = 1
+            for i in r.json()['data']['cards'][card_page]['card_group']:
+                screen_name = i['user']['screen_name']
+                uid = i['user']['id']
+                print(screen_name, uid)
+                following_list.append(str(uid))
+            print(len(following_list))
+            page += 1
+        return following_list
+
+    def get_fans_list():
+        fans_list = []
+        cookies = {'SUB': gsid}
+        since_id = ''
+        while True:
+            url = f'https://m.weibo.cn/api/container/getIndex?containerid=231016_-_selffans&since_id={since_id}'
+            r = requests.get(url, cookies=cookies)
+            if r.status_code == 418:
+                wait_time(60)
+            if r.json()['ok'] == 0:
+                break
+            card_page = 0
+            if len(r.json()['data']['cards']) == 2:
+                card_page = 1
+            for i in r.json()['data']['cards'][card_page]['card_group']:
+                screen_name = i['user']['screen_name']
+                uid = i['user']['id']
+                print(screen_name, uid)
+                fans_list.append(str(uid))
+            print(len(fans_list))
+            if 'since_id' not in r.json()['data']['cardlistInfo']:
+                break
+            since_id = r.json()['data']['cardlistInfo']['since_id']
+        return fans_list
+
+    if comment_following:
+        print('正在爬取关注列表')
+        try:
+            open('following.txt', 'r').close()
+        except:
+            with open('fans.txt', 'w') as f:
+                f.write('\n'.join(get_following_list()))
+    if comment_follow_me:
+        print('正在爬取粉丝列表')
+        try:
+            open('fans.txt', 'r').close()
+        except:
+            with open('fans.txt', 'w') as f:
+                f.write('\n'.join(get_fans_list()))
+
+
 def get_mid(cid, page=1):
     """
     获取帖子
@@ -269,22 +374,22 @@ def get_mid(cid, page=1):
     global is_frequent
 
     def analysis_and_join_list(mblog):
-        t = mblog['created_at']
+        time_state = mblog['created_at']
+        t = mblog['latest_update']
+        t = time.mktime(time.strptime(' '.join(t.split()[:4] + t.split()[-1:]), '%c'))
         mid = mblog['mid']
         text = mblog['text']
         user_id = str(mblog['user']['id'])
-        following = mblog['user']['following']
-        follow_me = mblog['user']['follow_me']
         if not after_zero(t):
             return
-        if comment_following and not following:
+        if comment_following and not following_in_file(user_id):
             return False
-        if comment_follow_me and follow_me:
+        if comment_follow_me and not fans_in_file(user_id):
             return False
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
             screen_name = mblog['user']['screen_name']
             mid_list.append((mid, user_id, text, screen_name))
-            print(screen_name.strip().replace('\n', ''), t, mid, user_id)
+            print(screen_name.strip().replace('\n', ''), time_state, mid, user_id)
             return True
         else:
             return False
@@ -335,7 +440,8 @@ def get_mid(cid, page=1):
                     mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
                     if analysis_and_join_list(mblog) is None:
                         return mid_list[:get_mid_max_r]
-                for j in r.json()['data']['cards'][card_page]['card_group']:
+                card_group = r.json()['data']['cards'][card_page]['card_group']
+                for j in card_group:
                     mblog = j['mblog']
                     if analysis_and_join_list(mblog) is None:
                         return mid_list[:get_mid_max_r]
@@ -800,18 +906,12 @@ def loop_comments(num):
             push_wechat('weibo_comments', f'''
                         {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                         请求过于频繁,正在等待{n}秒''')
-            while n + 1:
-                time.sleep(1)
-                sys.stdout.write(f'\r等待时间：{n}秒')
-                n -= 1
+            wait_time(n)
             print()
             is_frequent = False
         else:
             n = comments_wait_time
-        while n + 1:
-            time.sleep(1)
-            sys.stdout.write(f'\r等待时间：{n}秒')
-            n -= 1
+        wait_time(n)
         sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
         push_wechat('weibo_comments', f'''
             {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
@@ -828,7 +928,7 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
-    comments_wait_time = 10  # 每次延迟运行时间
+    comments_wait_time = 1  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
@@ -880,6 +980,7 @@ if __name__ == '__main__':
     gsid = get_gsid()
     uid = get_uid(gsid)
     cid = find_super_topic(st_name)
+    get_follow()
     if is_today():
         print('正在读取微博')
         my_mid = get_my_mid()
