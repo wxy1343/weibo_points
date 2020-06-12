@@ -85,18 +85,23 @@ def comment(args):
             print('你已经评论：' + detail_url)
         return
     cookies = {'SUB': gsid}
+    wait_time = 0.5
     while True:
         try:
+            if wait_time >= 8:
+                is_frequent = True
+                return
             r = requests.get(detail_url, cookies=cookies)
             logging.info(str(r.status_code))
             if r.status_code == 200:
                 break
             elif r.status_code == 418:
-                time.sleep(0.5)
+                time.sleep(wait_time)
             elif r.status_code == 403:
                 with lock:
                     print('评论失败：' + detail_url)
                 return
+            wait_time *= 2
         except:
             pass
     st = r.cookies.get_dict()['XSRF-TOKEN']
@@ -267,8 +272,16 @@ def get_mid(cid, page=1):
         mid = mblog['mid']
         text = mblog['text']
         user_id = str(mblog['user']['id'])
+        following = mblog['user']['following']
+        follow_me = mblog['user']['follow_me']
+        if comment_following:
+            if not following:
+                return False
+        if comment_follow_me:
+            if not follow_me:
+                return False
         if not after_zero(t):
-            return
+            return False
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
             screen_name = mblog['user']['screen_name']
             mid_list.append((mid, user_id, text, screen_name))
@@ -291,22 +304,27 @@ def get_mid(cid, page=1):
     p = 0  # 已爬取页数
     while i < page:
         length = len(mid_list)
+        get_mid_max_r = gen.send(get_mid_max)
         with lock:
             print('*' * 100)
             print('第%d页' % (p + 1))
         url = f'https://m.weibo.cn/api/container/getIndex?containerid={cid}_-_sort_time' + since_id
+        wait_time = 0.5
         while True:
             try:
-                r = req.get(url, timeout=2)
+                if wait_time >= 8:
+                    is_frequent = True
+                    return mid_list[:get_mid_max_r]
+                r = req.get(url)
                 logging.info(str(r.status_code))
                 if r.status_code == 200 and r.json()['ok'] == 1:
                     break
                 # 反爬
                 elif r.status_code == 418:
-                    is_frequent = True
-                    return mid_list[:get_mid_max]
+                    time.sleep(wait_time)
                 elif r.status_code == 502:
                     time.sleep(0.5)
+                wait_time *= 2
             except:
                 pass
         card_page = 0
@@ -316,20 +334,20 @@ def get_mid(cid, page=1):
                 card_page = 1
                 mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
                 if analysis_and_join_list(mblog) is None:
-                    return mid_list[:get_mid_max]
+                    return mid_list[:get_mid_max_r]
             for j in r.json()['data']['cards'][card_page]['card_group']:
                 mblog = j['mblog']
                 if analysis_and_join_list(mblog) is None:
-                    return mid_list[:get_mid_max]
+                    return mid_list[:get_mid_max_r]
         since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
         if length < len(mid_list):
             i += 1
         p += 1
         if p >= get_page_max:
             break
-        if len(mid_list) >= get_mid_max:
+        if len(mid_list) >= get_mid_max_r:
             break
-    return mid_list[:get_mid_max]
+    return mid_list[:get_mid_max_r]
 
 
 def get_my_mid():
@@ -707,24 +725,24 @@ def random_gen(random_list):
     :return:
     """
     while True:
-        yield str(random.choice(random_list))
+        yield random.choice(random_list)
 
 
-def comment_gen():
+def next_gen():
     """
-    评论生成器
+    判断生成器并返回下一个
     :return:
     """
     import types
-    commnet_obj = None
+    obj = None
     while True:
-        if type(commnet_obj) is types.GeneratorType:
-            commnet_obj = yield next(commnet_obj)
+        if type(obj) is types.GeneratorType:
+            obj = yield next(obj)
         else:
-            commnet_obj = yield commnet_obj
+            obj = yield obj
 
 
-gen = comment_gen()
+gen = next_gen()
 next(gen)
 
 
@@ -738,12 +756,15 @@ def start_comments():
     mid_list = get_mid(cid, get_mid_page)
     mid_lists = []
     for mid, user_id, text, name in mid_list:
-        content = gen.send(default_content)
-        for key in keywords_comment.keys():
-            if key in text:
-                content = gen.send(keywords_comment[key])
-        if user_id in user_comments.keys():
-            content = gen.send(user_comments[user_id])
+        while True:
+            content = gen.send(default_content)
+            for key in keywords_comment.keys():
+                if key in text:
+                    content = gen.send(keywords_comment[key])
+            if user_id in user_comments.keys():
+                content = gen.send(user_comments[user_id])
+            if len(content) <= 140:
+                break
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
     print('开始评论')
@@ -797,9 +818,11 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
-    get_mid_page = 100  # 一次爬微博页数
-    get_page_max = 100  # 爬取失败时最多爬取的页数
-    get_mid_max = 60  # 一次最多评论微博数量
+    comment_following = True  # 是否只评论已关注的
+    comment_follow_me = False  # 是否只评论关注自己的
+    get_mid_page = 200  # 一次爬微博页数
+    get_page_max = 200  # 爬取失败时最多爬取的页数
+    get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
@@ -835,9 +858,6 @@ if __name__ == '__main__':
     # 例：user_comments = {'xxx': random_comment}
     random_comment = random_gen(random_list)
 
-    # 默认评论内容
-    default_content = random_comment
-
     # 自定义用户评论
     user_comments = {
         # 用户id:评论内容
@@ -849,6 +869,9 @@ if __name__ == '__main__':
         # '异常': 'xxx',
         # '勿带链接': 'xxx'
     }
+
+    # 默认评论内容
+    default_content = random_comment
 
     init_log(logging.INFO)
     gsid = get_gsid()
