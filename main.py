@@ -275,14 +275,14 @@ def get_mid(cid, page=1):
         user_id = str(mblog['user']['id'])
         following = mblog['user']['following']
         follow_me = mblog['user']['follow_me']
+        if not after_zero(t):
+            return
         if comment_following:
             if not following:
                 return False
         if comment_follow_me:
             if not follow_me:
                 return False
-        if not after_zero(t):
-            return
         if mid != my_mid and not mid_in_file(mid) and user_id != uid:
             screen_name = mblog['user']['screen_name']
             mid_list.append((mid, user_id, text, screen_name))
@@ -773,6 +773,7 @@ def start_comments():
                 break
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
+    exit()
     print('开始评论')
     try:
         pool.map(comment, mid_lists)
@@ -831,7 +832,7 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
-    comments_wait_time = 10  # 每次延迟运行时间
+    comments_wait_time = 1  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
