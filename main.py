@@ -1,14 +1,16 @@
 import hashlib
 import logging
 import random
-import sys
-import traceback
-import requests
 import re
+import sys
 import time
+import traceback
 from multiprocessing.dummy import Pool
 from threading import Lock
+
+import requests
 from bs4 import BeautifulSoup
+
 from config import Config
 
 lock = Lock()
@@ -91,7 +93,7 @@ def comment(args):
         try:
             if wait_time >= 8:
                 is_frequent = True
-                return
+                return False
             r = requests.get(detail_url, cookies=cookies)
             logging.info(str(r.status_code))
             if r.status_code == 200:
@@ -101,7 +103,7 @@ def comment(args):
             elif r.status_code == 403:
                 with lock:
                     print('评论失败：' + detail_url)
-                return
+                return False
             wait_time *= 2
         except:
             pass
@@ -123,9 +125,10 @@ def comment(args):
         if r.json()['ok'] == 1:
             with lock:
                 print('评论成功：' + detail_url)
-            mid_write_file(mid)
+            if mid != my_mid:
+                mid_write_file(mid)
             com_suc_num += 1
-            return
+            return True
         else:
             with lock:
                 print('评论失败：' + detail_url)
@@ -151,7 +154,7 @@ def comment(args):
                     elif errno == '100001':
                         pass
 
-            return
+            return False
     except SystemExit:
         import os
         # 退出进程
@@ -161,7 +164,34 @@ def comment(args):
             print('评论失败：' + detail_url)
         if r.json()['errno'] == '100005':
             is_frequent = True
-        return
+        return False
+
+
+def edit_weibo(mid, content):
+    """
+    修改微博
+    :param mid:
+    :param content:
+    :return:
+    """
+    global at_weibo
+    print('正在修改微博')
+    cookies = {'SUB': gsid}
+    url = f'https://m.weibo.cn/detail/{mid}'
+    r = requests.get(url, cookies=cookies)
+    logging.info(str(r.status_code))
+    st = r.cookies.get_dict()['XSRF-TOKEN']
+    cookies.update(r.cookies.get_dict())
+    url = f'https://m.weibo.cn/api/statuses/update'
+    data = {'content': content, 'editId': mid, 'st': st}
+    headers = {'Referer': 'https://m.weibo.cn'}
+    r = requests.post(url, data=data, cookies=cookies, headers=headers)
+    logging.info(str(r.status_code))
+    if r.json()['ok'] == 1:
+        print('修改微博成功')
+    else:
+        print(r.json()['msg'])
+        at_weibo = False
 
 
 def after_zero(t):
@@ -175,16 +205,36 @@ def after_zero(t):
     return False
 
 
+def write_file(file_name, text):
+    """
+    写入文件
+    :param file_name:
+    :param text:
+    :return:
+    """
+    open(file_name, 'a').close()
+    with open(file_name, 'r') as f:
+        if text not in f.read():
+            with open(file_name, 'a') as f1:
+                f1.write(text + '\n')
+
+
 def mid_write_file(mid):
     """
     记录已经评论的mid
     :param mid:
     :return:
     """
-    with open('mid.txt', 'r') as f:
-        if mid not in f.read():
-            with open('mid.txt', 'a') as f1:
-                f1.write(mid + '\n')
+    write_file('mid.txt', mid)
+
+
+def at_write_file(name):
+    """
+    记录已经at的name
+    :param name:
+    :return:
+    """
+    write_file('at.txt', name)
 
 
 def in_file(file_name, text):
@@ -226,12 +276,29 @@ def fans_in_file(uid):
     return in_file('fans.txt', uid)
 
 
+def at_in_file(at):
+    """
+    用户是否在粉丝列表里
+    :param uid:
+    :return:
+    """
+    return in_file('at.txt', at)
+
+
 def clear_mid_file():
     """
     清除mid文件
     :return:
     """
     open('mid.txt', 'w').close()
+
+
+def clear_at_file():
+    """
+    清除at文件
+    :return:
+    """
+    open('at.txt', 'w').close()
 
 
 def clear_log():
@@ -242,18 +309,37 @@ def clear_log():
     open('weibo.log', 'w').close()
 
 
+def get_file_num(file_name):
+    """
+    获取文件中字符串的数量
+    :return:
+    """
+    count = 0
+    open(file_name, 'a').close()
+    with open(file_name, 'r') as f:
+        for i in f.read().split('\n'):
+            if i != '':
+                count += 1
+    return count
+
+
 def get_mid_num():
     """
     获取已经评论的mid的数量
     :return:
     """
-    count = 0
-    open('mid.txt', 'a').close()
-    with open('mid.txt', 'r') as f:
-        for i in f.read().split('\n'):
-            if i != '':
-                count += 1
-    return count
+    return get_file_num('mid.txt')
+
+
+def get_at_list():
+    """
+    获取at列表
+    :return:
+    """
+    open('at.txt', 'a').close()
+    with open('at.txt', 'r') as f:
+        text = f.read()
+    return ['@' + i for i in text.split('\n') if i != '']
 
 
 def get_weibo_info(gsid):
@@ -279,6 +365,16 @@ def get_weibo_info(gsid):
         info.append({'t': t, 'mid': mid, 'title': title})
     info.sort(key=lambda keys: keys['t'], reverse=True)
     return info
+
+
+def get_my_name():
+    url = f'https://m.weibo.cn/profile/info?uid={uid}'
+    r = requests.get(url)
+    try:
+        logging.info(str(r.status_code) + ':' + str(r.json()))
+    except:
+        logging.warning(str(r.status_code))
+    return r.json()['data']['user']['screen_name']
 
 
 def wait_time(n):
@@ -349,19 +445,34 @@ def get_follow():
         return fans_list
 
     if comment_following:
-        print('正在爬取关注列表')
         try:
             open('following.txt', 'r').close()
         except:
+            print('正在爬取关注列表')
             with open('fans.txt', 'w') as f:
                 f.write('\n'.join(get_following_list()))
     if comment_follow_me:
-        print('正在爬取粉丝列表')
         try:
             open('fans.txt', 'r').close()
         except:
+            print('正在爬取粉丝列表')
             with open('fans.txt', 'w') as f:
                 f.write('\n'.join(get_fans_list()))
+
+
+def at_weibo_gen():
+    while True:
+        name = yield
+        if not at_in_file(name):
+            at_write_file(name)
+        at_list = get_at_list()
+        if len(at_list) and len(at_list) % 50 == 0:
+            content = weibo_title + ' ' + ' '.join(at_list)
+            edit_weibo(my_mid, content)
+
+
+at_gen = at_weibo_gen()
+next(at_gen)
 
 
 def get_mid(cid, page=1):
@@ -380,19 +491,23 @@ def get_mid(cid, page=1):
         mid = mblog['mid']
         text = mblog['text']
         user_id = str(mblog['user']['id'])
+        screen_name = mblog['user']['screen_name']
         if not after_zero(t):
             return
-        if comment_following and not following_in_file(user_id):
-            return False
-        if comment_follow_me and not fans_in_file(user_id):
-            return False
-        if mid != my_mid and not mid_in_file(mid) and user_id != uid:
-            screen_name = mblog['user']['screen_name']
-            mid_list.append((mid, user_id, text, screen_name))
-            print(screen_name.strip().replace('\n', ''), time_state, mid, user_id)
-            return True
+        if at_weibo:
+            at_gen.send(screen_name)
+        if at_comment and '@' + my_name in text:
+            pass
         else:
-            return False
+            if comment_following and not following_in_file(user_id):
+                return False
+            if comment_follow_me and not fans_in_file(user_id):
+                return False
+        if mid != my_mid and not mid_in_file(mid) and user_id != uid:
+            print(screen_name.strip().replace('\n', ''), time_state, mid, user_id)
+            mid_list.append((mid, user_id, text, screen_name))
+            return True
+        return False
 
     mid_list = []
     since_id = ''
@@ -875,7 +990,7 @@ def start_comments():
                 content = gen.send(user_comments[user_id])
             if len(content) <= 140:
                 break
-        mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
+            mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
     print('开始评论')
     try:
@@ -897,6 +1012,7 @@ def loop_comments(num):
     """
     global uid
     global is_frequent
+    global my_name
     for i in range(num):
         get_uid(gsid)
         if get_mid_num() >= comment_max:
@@ -912,17 +1028,21 @@ def loop_comments(num):
         else:
             n = comments_wait_time
         wait_time(n)
+        my_name = get_my_name()
         sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
         push_wechat('weibo_comments', f'''
             {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
             第{i + 1}次，开始获取微博''')
         start_comments()
+    clear_at_file()
 
 
 if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
-    comment_following = False  # 是否只评论已关注的
+    comment_following = True  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
+    at_weibo = True  # @超话里的人到自己微博
+    at_comment = True  # 是否评论@自己的
     get_mid_page = 200  # 一次爬微博页数
     get_page_max = 200  # 爬取失败时最多爬取的页数
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
@@ -969,10 +1089,12 @@ if __name__ == '__main__':
     # 自定义关键字评论
     keywords_comment = {
         # 关键字:评论内容
-        # '异常': 'xxx',
+        # '异常': random_comment,
         # '勿带链接': 'xxx'
     }
 
+    # 带上链接
+    random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
     # 默认评论内容
     default_content = random_comment
 
@@ -991,6 +1113,7 @@ if __name__ == '__main__':
             print('读取成功')
     else:
         clear_log()
+        clear_at_file()
         clear_mid_file()
         print('正在创建微博')
         my_mid = create_weibo(gen.send(weibo_title), cid)
