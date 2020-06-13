@@ -1059,7 +1059,7 @@ if __name__ == '__main__':
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
     at_file = False  # @超话里的人保存到自文件
-    at_edit_weibo = False  # 自动修改微博文案@超话里的人，要先开at_weibo
+    at_edit_weibo = False  # 自动修改微博文案@超话里的人，要先开at_file
     at_comment = False  # 是否评论@自己的
     get_mid_page = 200  # 一次爬微博页数
     get_page_max = 200  # 爬取失败时最多爬取的页数
