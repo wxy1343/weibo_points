@@ -1025,7 +1025,7 @@ def loop_comments(num):
             is_frequent = False
         else:
             n = comments_wait_time
-        wait_time(n)
+            wait_time(n)
         my_name = get_my_name()
         sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
         push_wechat('weibo_comments', f'''
