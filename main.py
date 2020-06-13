@@ -7,10 +7,8 @@ import time
 import traceback
 from multiprocessing.dummy import Pool
 from threading import Lock
-
 import requests
 from bs4 import BeautifulSoup
-
 from config import Config
 
 lock = Lock()
