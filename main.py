@@ -1046,7 +1046,7 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
-    comments_wait_time = 1  # 每次延迟运行时间
+    comments_wait_time = 10  # 每次延迟运行时间
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
