@@ -1015,17 +1015,21 @@ def loop_comments(num):
         get_uid(gsid)
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
-        if is_frequent:
-            n = frequent_wait_time
-            push_wechat('weibo_comments', f'''
-                        {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                        请求过于频繁,正在等待{n}秒''')
-            wait_time(n)
-            print()
-            is_frequent = False
-        else:
-            n = comments_wait_time
-            wait_time(n)
+        while True:
+            if is_frequent:
+                n = frequent_wait_time
+                push_wechat('weibo_comments', f'''
+                            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+                            请求过于频繁,正在等待{n}秒''')
+                wait_time(n)
+                print()
+                is_frequent = False
+            else:
+                n = comments_wait_time
+                wait_time(n)
+            uid = get_uid(gsid)
+            if uid != None:
+                break
         my_name = get_my_name()
         sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
         push_wechat('weibo_comments', f'''
