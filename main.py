@@ -988,7 +988,7 @@ def start_comments():
                 content = gen.send(user_comments[user_id])
             if len(content) <= 140:
                 break
-            mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
+        mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
     print('开始评论')
     try:
