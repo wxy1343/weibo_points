@@ -172,7 +172,7 @@ def edit_weibo(mid, content):
     :param content:
     :return:
     """
-    global at_weibo
+    global at_file
     print('正在修改微博')
     cookies = {'SUB': gsid}
     url = f'https://m.weibo.cn/detail/{mid}'
@@ -189,7 +189,7 @@ def edit_weibo(mid, content):
         print('修改微博成功')
     else:
         print(r.json()['msg'])
-        at_weibo = False
+        at_file = False
 
 
 def after_zero(t):
@@ -466,7 +466,8 @@ def at_weibo_gen():
         at_list = get_at_list()
         if len(at_list) and len(at_list) % 50 == 0:
             content = weibo_title + ' ' + ' '.join(at_list)
-            edit_weibo(my_mid, content)
+            if auto_edit_weibo:
+                edit_weibo(my_mid, content)
 
 
 at_gen = at_weibo_gen()
@@ -492,7 +493,7 @@ def get_mid(cid, page=1):
         screen_name = mblog['user']['screen_name']
         if not after_zero(t):
             return
-        if at_weibo:
+        if at_file:
             at_gen.send(screen_name)
         if at_comment and '@' + my_name in text:
             pass
@@ -1012,7 +1013,7 @@ def loop_comments(num):
     global is_frequent
     global my_name
     for i in range(num):
-        get_uid(gsid)
+        uid = get_uid(gsid)
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
         while True:
@@ -1043,7 +1044,8 @@ if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
     comment_following = True  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
-    at_weibo = True  # @超话里的人到自己微博
+    at_file = True  # @超话里的人保存到自文件
+    at_edit_weibo = False  # 自动修改微博文案@超话里的人，要先开at_weibo
     at_comment = True  # 是否评论@自己的
     get_mid_page = 200  # 一次爬微博页数
     get_page_max = 200  # 爬取失败时最多爬取的页数
@@ -1060,7 +1062,7 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
 
     # 发送微博的标题
-    weibo_title = f'#{st_name}[超话]#积分！'
+    weibo_title = f'#{st_name}[超话]#积分'
 
     # 需要发送的群聊的id
     gid_list = [
@@ -1091,8 +1093,8 @@ if __name__ == '__main__':
     # 自定义关键字评论
     keywords_comment = {
         # 关键字:评论内容
-        # '异常': random_comment,
-        # '勿带链接': 'xxx'
+        # '异常': 'xxx',
+        # '勿带链接': random_comment
     }
 
     # 带上链接
