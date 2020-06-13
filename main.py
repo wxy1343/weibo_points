@@ -142,6 +142,9 @@ def comment(args):
                     # 只允许粉丝评论
                     elif errno == '20210':
                         mid_write_file(mid)
+                    # 只允许关注用户评论
+                    elif errno == '20206':
+                        mid_write_file(mid)
                     # 发微博太多
                     elif errno == '20016':
                         exit()
