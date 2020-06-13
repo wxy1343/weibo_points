@@ -198,9 +198,20 @@ def after_zero(t):
     :param t:
     :return:
     """
-    if t >= int(time.time()) - int(time.time() - time.timezone) % 86400:
-        return True
-    return False
+    if type(t) is str:
+        if t == '刚刚':
+            return True
+        elif re.match('^(\d{1,2})分钟前$', t):
+            if int(t[:-3]) * 60 < int(time.time() - time.timezone) % 86400:
+                return True
+        elif re.match('^(\d{1,2})小时前$', t):
+            if int(t[:-3]) * 3600 < int(time.time() - time.timezone) % 86400:
+                return True
+        return False
+    else:
+        if t >= int(time.time()) - int(time.time() - time.timezone) % 86400:
+            return True
+        return False
 
 
 def write_file(file_name, text):
@@ -466,7 +477,7 @@ def at_weibo_gen():
         at_list = get_at_list()
         if len(at_list) and len(at_list) % 50 == 0:
             content = weibo_title + ' ' + ' '.join(at_list)
-            if auto_edit_weibo:
+            if at_edit_weibo:
                 edit_weibo(my_mid, content)
 
 
@@ -485,8 +496,11 @@ def get_mid(cid, page=1):
 
     def analysis_and_join_list(mblog):
         time_state = mblog['created_at']
-        t = mblog['latest_update']
-        t = time.mktime(time.strptime(' '.join(t.split()[:4] + t.split()[-1:]), '%c'))
+        try:
+            t = mblog['latest_update']
+            t = time.mktime(time.strptime(' '.join(t.split()[:4] + t.split()[-1:]), '%c'))
+        except:
+            t = time_state
         mid = mblog['mid']
         text = mblog['text']
         user_id = str(mblog['user']['id'])
@@ -1042,11 +1056,11 @@ def loop_comments(num):
 
 if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
-    comment_following = True  # 是否只评论已关注的
+    comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
-    at_file = True  # @超话里的人保存到自文件
+    at_file = False  # @超话里的人保存到自文件
     at_edit_weibo = False  # 自动修改微博文案@超话里的人，要先开at_weibo
-    at_comment = True  # 是否评论@自己的
+    at_comment = False  # 是否评论@自己的
     get_mid_page = 200  # 一次爬微博页数
     get_page_max = 200  # 爬取失败时最多爬取的页数
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
@@ -1062,7 +1076,7 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
 
     # 发送微博的标题
-    weibo_title = f'#{st_name}[超话]#积分'
+    weibo_title = f'#{st_name}[超话]#积分！'
 
     # 需要发送的群聊的id
     gid_list = [
@@ -1093,7 +1107,7 @@ if __name__ == '__main__':
     # 自定义关键字评论
     keywords_comment = {
         # 关键字:评论内容
-        # '异常': 'xxx',
+        # '异常': random_comment,
         # '勿带链接': random_comment
     }
 
