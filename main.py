@@ -1058,7 +1058,7 @@ if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
-    at_file = False  # @超话里的用户保存到自文件
+    at_file = False  # @超话里的用户保存到文件
     at_edit_weibo = False  # 自动修改微博文案@超话里的用户，要先开at_file
     at_comment = False  # 是否评论@自己的
     get_mid_page = 200  # 一次爬微博页数
