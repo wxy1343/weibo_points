@@ -154,6 +154,9 @@ def comment(args):
                     # 服务器走丢了
                     elif errno == '100001':
                         pass
+                    # 在黑名单中，无法进行评论
+                    elif errno == '20205':
+                        mid_write_file(mid)
 
             return False
     except SystemExit:
@@ -1030,7 +1033,7 @@ def loop_comments(num):
     global is_frequent
     global my_name
     for i in range(num):
-        uid = get_uid(gsid)
+        get_uid(gsid)
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
         while True:
@@ -1045,10 +1048,8 @@ def loop_comments(num):
             else:
                 n = comments_wait_time
                 wait_time(n)
-            uid = get_uid(gsid)
-            if uid != None:
                 break
-        my_name = get_my_name()
+            get_uid(gsid)
         sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
         push_wechat('weibo_comments', f'''
             {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
@@ -1110,18 +1111,19 @@ if __name__ == '__main__':
     # 自定义关键字评论
     keywords_comment = {
         # 关键字:评论内容
-        # '异常': random_comment,
-        # '勿带链接': random_comment
     }
 
-    # 带上链接
-    random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
     # 默认评论内容
     default_content = random_comment
 
     init_log(logging.INFO)
     gsid = get_gsid()
     uid = get_uid(gsid)
+    while uid is None:
+        wait_time(600)
+        uid = get_uid(gsid)
+    is_frequent = False
+    my_name = get_my_name()
     cid = find_super_topic(st_name)
     get_follow()
     if is_today():
