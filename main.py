@@ -5,9 +5,8 @@ import random
 import re
 import sys
 import time
-import traceback
 from multiprocessing.dummy import Pool
-from threading import Lock
+from threading import Lock, Thread, RLock
 import requests
 from bs4 import BeautifulSoup
 from config import Config
@@ -15,6 +14,7 @@ from config import Config
 lock = Lock()
 pool = Pool(100)
 is_frequent = False
+writable = True
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0'}
 cf = Config('config.ini', '配置')
 
@@ -404,7 +404,7 @@ def get_my_name():
     return r.json()['data']['user']['screen_name']
 
 
-def wait_time(n):
+def wait_time(n, text='等待时间'):
     """
     等待n秒
     :param n:
@@ -412,8 +412,10 @@ def wait_time(n):
     """
     while n + 1:
         time.sleep(1)
-        sys.stdout.write(f'\r等待时间：{n}秒')
+        with lock:
+            w_gen.send({text: n})
         n -= 1
+    w_gen.send({text: None})
 
 
 def get_follow():
@@ -503,7 +505,23 @@ at_gen = at_weibo_gen()
 next(at_gen)
 
 
-def get_mid(cid, page=1):
+def write_gen():
+    l = {}
+    while True:
+        d = yield
+        if type(d) is dict:
+            l[list(d)[0]] = d[list(d)[0]]
+            s = '\r' + ','.join([str(i) + ':' + str(l[i]) for i in l if l[i] != None])
+            if writable:
+                sys.stdout.write(s)
+                sys.stdout.flush()
+
+
+w_gen = write_gen()
+next(w_gen)
+
+
+def get_mid(cid):
     """
     获取帖子
     :param cid: 超话id
@@ -511,6 +529,9 @@ def get_mid(cid, page=1):
     :return: 帖子列表
     """
     global is_frequent
+
+    def mid_in_file(mid):
+        return len([i for i in read_mid() if 'mid' in i.keys() and mid == i['mid']]) == 1
 
     def analysis_and_join_list(mblog):
         time_state = mblog['created_at']
@@ -524,46 +545,26 @@ def get_mid(cid, page=1):
         user_id = str(mblog['user']['id'])
         screen_name = mblog['user']['screen_name']
         if not after_zero(t):
+            cf.Add('配置', 'is_finish', str(True))
             return
-        if at_file:
-            at_gen.send(screen_name)
-        if at_comment and '@' + my_name in text:
-            pass
-        else:
-            if comment_following and not following_in_file(user_id):
-                return False
-            if comment_follow_me and not fans_in_file(user_id):
-                return False
-        if mid != my_mid and not mid_in_file(mid) and user_id != uid:
-            print(screen_name, time_state, mid, user_id)
-            mid_list.append((mid, user_id, text, screen_name))
-            return True
-        return False
+        if is_finish and mid_in_file(mid):
+            return
+        write_mid({'mid': mid, 'user_id': user_id, 'text': text, 'screen_name': screen_name})
+        return True
 
-    mid_list = []
+    is_finish = cf.GetBool('配置', 'is_finish')
     since_id = ''
-    start_page = 0
-    if re.match('\d+ \d+', str(page)):
-        start_page = int(page.split()[0])
-        page = int(page.split()[1])
-    else:
-        page = int(page)
     req = requests.Session()
     req.headers = headers
-    i = 0  # 爬取成功页数
-    p = 0  # 已爬取页数
-    get_mid_max_r = gen.send(get_mid_max)
-    while i < page:
-        length = len(mid_list)
-        print('*' * 100)
-        print('第%d页' % (p + 1))
+    i = 1
+    while True:
+        w_gen.send({'正在爬取页数': i})
         url = f'https://m.weibo.cn/api/container/getIndex?containerid={cid}_-_sort_time' + since_id
         wait_time = 0.5
         while True:
             try:
                 if wait_time >= 8:
                     is_frequent = True
-                    return mid_list[:get_mid_max_r]
                 r = req.get(url)
                 logging.info(str(r.status_code))
                 if r.status_code == 200 and r.json()['ok'] == 1:
@@ -578,30 +579,83 @@ def get_mid(cid, page=1):
                 pass
         card_page = 0
         try:
-            if p + 1 >= start_page:
-                # 判断是否是第一页
-                if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
-                    card_page = 1
-                    mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
-                    if analysis_and_join_list(mblog) is None:
-                        return mid_list[:get_mid_max_r]
-                card_group = r.json()['data']['cards'][card_page]['card_group']
-                for j in card_group:
-                    mblog = j['mblog']
-                    if analysis_and_join_list(mblog) is None:
-                        return mid_list[:get_mid_max_r]
+            # 判断是否是第一页
+            if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
+                card_page = 1
+                mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
+                if analysis_and_join_list(mblog) is None:
+                    w_gen.send({'正在爬取页数': None})
+                    return
+            card_group = r.json()['data']['cards'][card_page]['card_group']
+            for j in card_group:
+                mblog = j['mblog']
+                if analysis_and_join_list(mblog) is None:
+                    w_gen.send({'正在爬取页数': None})
+                    return
             since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
         except:
-            logging.error(r.json())
-            traceback.print_exc()
-            return mid_list[:get_mid_max_r]
-        if length < len(mid_list):
-            i += 1
-        p += 1
-        if p >= get_page_max:
-            break
-        if len(mid_list) >= get_mid_max_r:
-            break
+            pass
+        i += 1
+
+
+def loop_get_mid(cid):
+    while True:
+        get_mid(cid)
+        t = gen.send(get_weibo_time)
+        wait_time(t, '获取微博等待时间')
+
+
+def write_mid(mid_dict: dict):
+    open('mid.json', 'a').close()
+    with open('mid.json', 'r') as f1:
+        try:
+            l = [dict(t) for t in set([tuple(d.items()) for d in json.loads(f1.read())])]
+        except:
+            l = []
+    with open('mid.json', 'w+') as f:
+        if mid_dict not in l:
+            l.append(mid_dict)
+        f.write(json.dumps(l, indent=2))
+
+
+def read_mid():
+    open('mid.json', 'a').close()
+    with open('mid.json', 'r') as f1:
+        try:
+            l = json.loads(f1.read())
+        except:
+            l = []
+    return l
+
+
+def get_mid_list():
+    mid_list = []
+    n = 0
+    while mid_list == []:
+        get_mid_max_r = gen.send(get_mid_max)
+        for mid_dict in read_mid():
+            comments = True
+            screen_name = mid_dict['screen_name']
+            text = mid_dict['text']
+            user_id = mid_dict['user_id']
+            mid = mid_dict['mid']
+            if at_file:
+                at_gen.send(screen_name)
+            if at_comment and '@' + my_name in text:
+                pass
+            else:
+                if comment_following and not following_in_file(user_id):
+                    comments = False
+                if comment_follow_me and not fans_in_file(user_id):
+                    comments = False
+            if comments and mid != my_mid and not mid_in_file(mid) and user_id != uid:
+                mid_list.append((mid, user_id, text, screen_name))
+        if mid_list == []:
+            w_gen.send({'未有新微博': n})
+            n += 1
+            time.sleep(1)
+    w_gen.send({'未有新微博': None})
+    w_gen.send({'等待评论数': len(mid_list)})
     return mid_list[:get_mid_max_r]
 
 
@@ -1008,7 +1062,8 @@ def start_comments():
     """
     global com_suc_num
     global is_frequent
-    mid_list = get_mid(cid, get_mid_page)
+    global writable
+    mid_list = get_mid_list()
     mid_lists = []
     for mid, user_id, text, name in mid_list:
         while True:
@@ -1022,13 +1077,16 @@ def start_comments():
                 break
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
-    print('开始评论')
+    writable = False
+    print('\n开始评论')
     try:
         pool.map(comment, mid_lists)
     except:
         is_frequent = True
     print('评论成功数：' + str(com_suc_num))
     print('总评论数：' + str(get_mid_num()))
+    w_gen.send({'等待评论数': None})
+    writable = True
     push_wechat('weibo_comments', f'''
                 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                 评论成功数：{com_suc_num}  总评论数：{get_mid_num()}''')
@@ -1053,33 +1111,28 @@ def loop_comments(num):
                 push_wechat('weibo_comments', f'''
                             {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                             请求过于频繁,正在等待{n}秒''')
-                wait_time(n)
+                wait_time(n, '频繁等待时间')
                 print()
                 is_frequent = False
             else:
                 n = comments_wait_time
-                wait_time(n)
+                wait_time(n, '评论等待时间')
                 break
             get_uid(gsid)
-        sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
-        push_wechat('weibo_comments', f'''
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-            第{i + 1}次，开始获取微博''')
         start_comments()
     if at_file:
         clear_at_file()
 
 
 if __name__ == '__main__':
-    # wait_zero()  # 等待零点执行
+    wait_zero()  # 等待零点执行
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
     at_file = False  # @超话里的用户保存到文件
     at_edit_weibo = False  # 自动修改微博文案@超话里的用户，要先开at_file
     at_comment = False  # 是否评论@自己的
-    get_mid_page = 200  # 一次爬微博页数
-    get_page_max = 200  # 爬取失败时最多爬取的页数
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
+    get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
@@ -1185,6 +1238,7 @@ if __name__ == '__main__':
         clear_at_file()
         clear_mid_file()
         clear_mid_json()
+        cf.Add('配置', 'is_finish', str(False))
         print('正在创建微博')
         my_mid = create_weibo(gen.send(weibo_title), cid)
         if my_mid == False:
@@ -1212,4 +1266,5 @@ if __name__ == '__main__':
         vip_task_complete(gsid)
         print('*' * 100)
     print('https://m.weibo.cn/detail/' + my_mid)
+    Thread(target=loop_get_mid, args=(cid,)).start()
     loop_comments(loop_comments_num)
