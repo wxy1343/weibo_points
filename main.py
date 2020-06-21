@@ -593,7 +593,7 @@ def loop_get_mid(cid):
     while True:
         get_mid(cid)
         t = random.randint(5, 10)
-        wait_time(t, '获取mid等待时间')
+        wait_time(t, '获取微博等待时间')
 
 
 def write_mid(mid_dict: dict):
