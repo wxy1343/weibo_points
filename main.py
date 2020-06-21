@@ -592,7 +592,7 @@ def get_mid(cid):
 def loop_get_mid(cid):
     while True:
         get_mid(cid)
-        t = random.randint(5, 10)
+        t = gen.send(get_weibo_time)
         wait_time(t, '获取微博等待时间')
 
 
@@ -1126,9 +1126,8 @@ if __name__ == '__main__':
     at_file = False  # @超话里的用户保存到文件
     at_edit_weibo = False  # 自动修改微博文案@超话里的用户，要先开at_file
     at_comment = False  # 是否评论@自己的
-    get_mid_page = 200  # 一次爬微博页数
-    get_page_max = 200  # 爬取失败时最多爬取的页数
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
+    get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 20  # 运行次数
     comments_wait_time = 10  # 每次延迟运行时间
