@@ -540,7 +540,6 @@ def get_mid(cid):
             return
         if is_finish and mid_in_file(mid):
             return
-        # print(screen_name, time_state, mid, user_id)
         write_mid({'mid': mid, 'user_id': user_id, 'text': text, 'screen_name': screen_name})
         return True
 
@@ -558,6 +557,7 @@ def get_mid(cid):
                 if wait_time >= 8:
                     is_frequent = True
                 r = req.get(url)
+                logging.info(str(r.status_code))
                 if r.status_code == 200 and r.json()['ok'] == 1:
                     break
                 # 反爬
@@ -1110,10 +1110,6 @@ def loop_comments(num):
                 wait_time(n, '评论等待时间')
                 break
             get_uid(gsid)
-        # sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
-        # push_wechat('weibo_comments', f'''
-        #     {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-        #     第{i + 1}次，开始获取微博''')
         start_comments()
     if at_file:
         clear_at_file()
