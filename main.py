@@ -1,12 +1,12 @@
 import hashlib
+import json
 import logging
 import random
 import re
 import sys
 import time
-import traceback
 from multiprocessing.dummy import Pool
-from threading import Lock
+from threading import Lock, Thread, RLock
 import requests
 from bs4 import BeautifulSoup
 from config import Config
@@ -14,6 +14,7 @@ from config import Config
 lock = Lock()
 pool = Pool(100)
 is_frequent = False
+writable = True
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0'}
 cf = Config('config.ini', '配置')
 
@@ -156,6 +157,9 @@ def comment(args):
                         pass
                     # 在黑名单中，无法进行评论
                     elif errno == '20205':
+                        mid_write_file(mid)
+                    # 微博不存在或暂无查看权限
+                    elif errno == '20101':
                         mid_write_file(mid)
 
             return False
@@ -392,7 +396,7 @@ def get_my_name():
     return r.json()['data']['user']['screen_name']
 
 
-def wait_time(n):
+def wait_time(n, text='等待时间'):
     """
     等待n秒
     :param n:
@@ -400,8 +404,9 @@ def wait_time(n):
     """
     while n + 1:
         time.sleep(1)
-        sys.stdout.write(f'\r等待时间：{n}秒')
+        w_gen.send({text: n})
         n -= 1
+    w_gen.send({text: None})
 
 
 def get_follow():
@@ -491,7 +496,23 @@ at_gen = at_weibo_gen()
 next(at_gen)
 
 
-def get_mid(cid, page=1):
+def write_gen():
+    l = {}
+    while True:
+        d = yield
+        if type(d) is dict:
+            l[list(d)[0]] = d[list(d)[0]]
+            s = '\r' + ','.join([str(i) + ':' + str(l[i]) for i in l if l[i] != None])
+            if writable:
+                sys.stdout.write(s)
+                sys.stdout.flush()
+
+
+w_gen = write_gen()
+next(w_gen)
+
+
+def get_mid(cid):
     """
     获取帖子
     :param cid: 超话id
@@ -499,6 +520,9 @@ def get_mid(cid, page=1):
     :return: 帖子列表
     """
     global is_frequent
+
+    def mid_in_file(mid):
+        return len([i for i in read_mid() if 'mid' in i.keys() and mid == i['mid']]) == 1
 
     def analysis_and_join_list(mblog):
         time_state = mblog['created_at']
@@ -512,49 +536,28 @@ def get_mid(cid, page=1):
         user_id = str(mblog['user']['id'])
         screen_name = mblog['user']['screen_name']
         if not after_zero(t):
+            cf.Add('配置', 'is_finish', str(True))
             return
-        if at_file:
-            at_gen.send(screen_name)
-        if at_comment and '@' + my_name in text:
-            pass
-        else:
-            if comment_following and not following_in_file(user_id):
-                return False
-            if comment_follow_me and not fans_in_file(user_id):
-                return False
-        if mid != my_mid and not mid_in_file(mid) and user_id != uid:
-            print(screen_name.strip().replace('\n', ''), time_state, mid, user_id)
-            mid_list.append((mid, user_id, text, screen_name))
-            return True
-        return False
+        if is_finish and mid_in_file(mid):
+            return
+        # print(screen_name, time_state, mid, user_id)
+        write_mid({'mid': mid, 'user_id': user_id, 'text': text, 'screen_name': screen_name})
+        return True
 
-    mid_list = []
+    is_finish = cf.GetBool('配置', 'is_finish')
     since_id = ''
-    start_page = 0
-    if re.match('\d+ \d+', str(page)):
-        start_page = int(page.split()[0])
-        page = int(page.split()[1])
-    else:
-        page = int(page)
     req = requests.Session()
     req.headers = headers
-    i = 0  # 爬取成功页数
-    p = 0  # 已爬取页数
-    get_mid_max_r = gen.send(get_mid_max)
-    while i < page:
-        length = len(mid_list)
-        with lock:
-            print('*' * 100)
-            print('第%d页' % (p + 1))
+    i = 1
+    while True:
+        w_gen.send({'正在爬取页数': i})
         url = f'https://m.weibo.cn/api/container/getIndex?containerid={cid}_-_sort_time' + since_id
         wait_time = 0.5
         while True:
             try:
                 if wait_time >= 8:
                     is_frequent = True
-                    return mid_list[:get_mid_max_r]
                 r = req.get(url)
-                logging.info(str(r.status_code))
                 if r.status_code == 200 and r.json()['ok'] == 1:
                     break
                 # 反爬
@@ -567,30 +570,83 @@ def get_mid(cid, page=1):
                 pass
         card_page = 0
         try:
-            if p + 1 >= start_page:
-                # 判断是否是第一页
-                if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
-                    card_page = 1
-                    mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
-                    if analysis_and_join_list(mblog) is None:
-                        return mid_list[:get_mid_max_r]
-                card_group = r.json()['data']['cards'][card_page]['card_group']
-                for j in card_group:
-                    mblog = j['mblog']
-                    if analysis_and_join_list(mblog) is None:
-                        return mid_list[:get_mid_max_r]
+            # 判断是否是第一页
+            if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
+                card_page = 1
+                mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
+                if analysis_and_join_list(mblog) is None:
+                    w_gen.send({'正在爬取页数': None})
+                    return
+            card_group = r.json()['data']['cards'][card_page]['card_group']
+            for j in card_group:
+                mblog = j['mblog']
+                if analysis_and_join_list(mblog) is None:
+                    w_gen.send({'正在爬取页数': None})
+                    return
             since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
         except:
-            logging.error(r.json())
-            traceback.print_exc()
-            return mid_list[:get_mid_max_r]
-        if length < len(mid_list):
-            i += 1
-        p += 1
-        if p >= get_page_max:
-            break
-        if len(mid_list) >= get_mid_max_r:
-            break
+            pass
+        i += 1
+
+
+def loop_get_mid(cid):
+    while True:
+        get_mid(cid)
+        t = random.randint(5, 10)
+        wait_time(t, '获取mid等待时间')
+
+
+def write_mid(mid_dict: dict):
+    open('mid_list.json', 'a').close()
+    with open('mid_list.json', 'r') as f1:
+        try:
+            l = [dict(t) for t in set([tuple(d.items()) for d in json.loads(f1.read())])]
+        except:
+            l = []
+    with open('mid_list.json', 'w+') as f:
+        if mid_dict not in l:
+            l.append(mid_dict)
+        f.write(json.dumps(l, indent=2))
+
+
+def read_mid():
+    open('mid_list.json', 'a').close()
+    with open('mid_list.json', 'r') as f1:
+        try:
+            l = json.loads(f1.read())
+        except:
+            l = []
+    return l
+
+
+def get_mid_list():
+    mid_list = []
+    n = 0
+    while mid_list == []:
+        get_mid_max_r = gen.send(get_mid_max)
+        for mid_dict in read_mid():
+            comments = True
+            screen_name = mid_dict['screen_name']
+            text = mid_dict['text']
+            user_id = mid_dict['user_id']
+            mid = mid_dict['mid']
+            if at_file:
+                at_gen.send(screen_name)
+            if at_comment and '@' + my_name in text:
+                pass
+            else:
+                if comment_following and not following_in_file(user_id):
+                    comments = False
+                if comment_follow_me and not fans_in_file(user_id):
+                    comments = False
+            if comments and mid != my_mid and not mid_in_file(mid) and user_id != uid:
+                mid_list.append((mid, user_id, text, screen_name))
+        if mid_list == []:
+            w_gen.send({'未有新微博': n})
+            n += 1
+            time.sleep(1)
+    w_gen.send({'未有新微博': None})
+    w_gen.send({'等待评论数': len(mid_list)})
     return mid_list[:get_mid_max_r]
 
 
@@ -997,7 +1053,8 @@ def start_comments():
     """
     global com_suc_num
     global is_frequent
-    mid_list = get_mid(cid, get_mid_page)
+    global writable
+    mid_list = get_mid_list()
     mid_lists = []
     for mid, user_id, text, name in mid_list:
         while True:
@@ -1011,13 +1068,15 @@ def start_comments():
                 break
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
-    print('开始评论')
+    writable = False
+    print('\n开始评论')
     try:
         pool.map(comment, mid_lists)
     except:
         is_frequent = True
     print('评论成功数：' + str(com_suc_num))
     print('总评论数：' + str(get_mid_num()))
+    writable = True
     push_wechat('weibo_comments', f'''
                 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                 评论成功数：{com_suc_num}  总评论数：{get_mid_num()}''')
@@ -1042,20 +1101,21 @@ def loop_comments(num):
                 push_wechat('weibo_comments', f'''
                             {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                             请求过于频繁,正在等待{n}秒''')
-                wait_time(n)
+                wait_time(n, '频繁等待时间')
                 print()
                 is_frequent = False
             else:
                 n = comments_wait_time
-                wait_time(n)
+                wait_time(n, '评论等待时间')
                 break
             get_uid(gsid)
-        sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
-        push_wechat('weibo_comments', f'''
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-            第{i + 1}次，开始获取微博''')
+        # sys.stdout.write(f'\r第{i + 1}次，开始获取微博\n')
+        # push_wechat('weibo_comments', f'''
+        #     {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+        #     第{i + 1}次，开始获取微博''')
         start_comments()
-    clear_at_file()
+    if at_file:
+        clear_at_file()
 
 
 if __name__ == '__main__':
@@ -1074,17 +1134,21 @@ if __name__ == '__main__':
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
+    # SCKEY = 'SCU74718T8836a10973c4a4cdb674b9b9bdf4bd345e6ded48599d1'
     SCKEY = ''
 
     # 评论的超话
     st_name = '橘子工厂'
 
     # 发送微博的标题
-    weibo_title = f'#{st_name}[超话]#积分！'
+    weibo_title = f'#{st_name}[超话]##鞠婧祎618超拼夜#jjy#鞠婧祎如意芳霏# @鞠婧祎 鞠婧祎云上恋歌🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#'
 
     # 需要发送的群聊的id
     gid_list = [
-
+        '4422005636073296',  # 鞠婧祎官方粉丝群
+        '4359568601971447',  # 鞠婧祎粉丝交流1群
+        '4396116282389771',  # 鞠婧祎粉丝交流3群
+        '4136736277648321'  # 鞠婧祎话题报刊亭
     ]
 
     # 微博链接
@@ -1093,7 +1157,30 @@ if __name__ == '__main__':
 
     # 随机评论列表
     random_list = [
-        '@{name} ' + mid_link
+        '@{name} #鞠婧祎618超拼夜#jjy#鞠婧祎如意芳霏# @鞠婧祎 鞠婧祎云上恋歌🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#',
+        '@{name} 【鞠婧祎云上恋歌】🍊【鞠婧祎如意芳霏】🍊【鞠婧祎芸汐传】🍊【鞠婧祎恋爱告急】🍊【鞠婧祎叹云兮】🍊【鞠婧祎壁纸】🍊【鞠婧祎头像】🍊【鞠婧祎穿搭】🍊 【鞠婧祎美图】',
+        '@{name} 神仙颜值鞠婧祎✨💜人间理想鞠婧祎✨💛温柔体贴鞠婧祎✨💚治愈微笑鞠婧祎✨💙不可替代鞠婧祎✨❤深得我心鞠婧祎✨💜星辰皓月鞠婧祎✨💛金光闪闪鞠婧祎✨💚一见钟情鞠婧祎✨💙宝藏女孩鞠婧祎✨❤',
+        '@{name} 鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎',
+        '@{name} 鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊鞠婧祎🍊',
+        '@{name} 【鞠婧祎云上恋歌】🍊【鞠婧祎如意芳霏】🍊【鞠婧祎芸汐传】🍊【鞠婧祎恋爱告急】🍊【鞠婧祎叹云兮】🍊【鞠婧祎壁纸】🍊【鞠婧祎头像】🍊【鞠婧祎妆容】🍊 【鞠婧祎美图】',
+        '@{name} 全能ACE鞠婧祎[给你小心心]绝美生唱鞠婧祎[兔子]实力证明鞠婧祎[拳头]肤白貌美鞠婧祎[好喜欢]腰细腿瘦鞠婧祎[污]绝美比例鞠婧祎[坏笑]可爱真实鞠婧祎[亲亲]正能量偶像鞠婧祎[可爱]完美下颚鞠婧祎[馋嘴]我最喜欢鞠婧祎[挤眼]可甜可御鞠婧祎[挤眼]未来可期[爱你]',
+        '@{name} ┏┈┈┈┈┈┈┈┈┈┈┈┈┈┈┓ ❤️ 青年演员🎤 青年歌手🎉 𝙙𝙖𝙣𝙘𝙚𝙧 🎬 全能艺人💃 唱跳俱佳[给你小心心] 鞠婧祎 ┗┈┈┈┈┈┈┈┈┈┈┈┈┈┈┛',
+        '@{name} 🍊✨🍶人间理想 鞠婧祎🍊✨🍶宝藏女孩鞠婧祎✨🍶💛🐰元气女孩鞠婧祎🍊✨🍶🐰优秀女孩鞠婧祎🌈🍭🍊傲娇女孩鞠婧祎🍊✨🍶',
+        '@{name} 全能艺人鞠婧祎🎇🍊💫甜度满分鞠婧祎🎇🍊💫完美vocal鞠婧祎🎇🍊💫人间理想鞠婧祎🎇🍊💫璀璨星河鞠婧祎🎇🍊💫传统偶像鞠婧祎🎇🍊💫可甜可盐鞠婧祎🎇🍊💫颜值爆表鞠婧祎🎇🍊💫唱跳俱佳鞠婧祎🎇🍊💫',
+        '@{name} 唯一现代宋茶茶🍵人美心善宋茶茶🍵绝美厨师宋茶茶🍵活泼机灵宋茶茶🍵落难千金宋茶茶🍵不屈不挠宋茶茶🍵时尚达人宋茶茶🍵最美厨师宋茶茶🍵努力好学宋茶茶🍵人间精灵宋茶茶🍵超绝可爱宋茶茶 🍵 top顶流宋茶茶🍵 上过央视宋茶茶🍵',
+        '@{name} 俏皮可爱韩芸汐🍼一心一意韩芸汐🍼红衣最美韩芸汐🍼最强圈粉韩芸汐🍼收视能打韩芸汐🍼真正ace韩芸汐🍼绝不转推韩芸汐🍼人见人爱韩芸汐🍼我最喜欢韩芸汐🍼解毒高手韩芸汐🍼最美王妃韩芸汐🍼善良可爱韩芸汐🍼伶牙俐齿韩芸汐🍼人间仙子韩芸汐🍼治病救人韩芸汐🍼',
+        '@{name} 她是《新白娘子传奇》里的白素贞，一世真情，不惜千年道行；她是《芸汐传》里的韩芸汐，神通广大，更是心血难凉；她是《请赐我一双翅膀》里的林九歌，足智多谋，逆风亦飞翔；她是《游泳先生》里的宋茶茶，天真无邪，自立自强；她是青年演员歌手鞠婧祎，星河璀璨，扬帆远航。',
+        '@{name} 鞠婧祎孤独与诗 🍡 鞠婧祎傅容🍡鞠婧祎如意芳霏🍡 鞠婧祎代言东方彩妆花西子 🍡 鞠婧祎悦木之源探索大使🍡 鞠婧祎云上恋歌🍡鞠婧祎雪文曦🍡鞠婧祎恋爱告急',
+        '@{name} 是西山上天真烂漫的懵懂少女，也是樱花林间顾盼生姿的绝世佳人，欢笑是你，泪水是你，前世今生只你一人足矣。期待傅容@鞠婧祎 带来的《如意芳霏》，看她如何从细微处推断惊天秘密，急流勇退掌握别样人生。',
+        '@{name} 大梦惊醒道无情，傲骨刚肠四飘零。慧眼明断家国事，东篱结庐夜瞻星。期待傅容@鞠婧祎 带来的《如意芳霏》，看她如何从细微处推断惊天秘密，又怎样急流勇退掌握自己人生。',
+        '@{name} 前世今生，如幻如梦，唯有你是这世间唯一的真，想要把这世上所有的温柔都赠予你，却发现你就是温柔本身。让我们一起期待鞠婧祎@鞠婧祎 的傅容，开启一段旷世奇缘',
+        '@{name} 比起皎洁的月，你更像满天繁星。而在浩渺的宇宙里，你就像恒星，有着自己的轨迹，反射着璀璨的光亮……月色很美，但我喜欢星星。很高兴见到你，傅容@鞠婧祎',
+        '@{name} 如意芳霏，人间美满。我路过泥泞路过风，也路过你，恰似春光乍现。 初心不负，遇见傅容@鞠婧祎',
+        '@{name} 芊芊少女，美人如玉。此次归来，书写爱情的新篇章。是琴瑟之好，也是连枝共冢。让我们跟随@鞠婧祎 饰演的傅容，走入《如意芳霏》中的爱情世界吧！期待鞠婧祎傅容，期待《如意芳霏》',
+        '@{name} 如意芳霏如你，韶华荏苒如你，渐行渐远渐无书，流年似水似柔情，缘世今生都有你，梦里梦外都是你 。@鞠婧祎',
+        '@{name} 期待@鞠婧祎 饰演的傅容妹妹[给你小心心]她不仅是高高在上的肃王妃，也是掌管如意楼的女掌柜，国家暗卫在手[并不简单]爱情事业双丰收，江湖朝堂都有她的传说～甜爽再度升级，双重预知的新颖设定，我i了[羞嗒嗒]',
+        '@{name} 前世她身为长安府尹之女，却下场凄凉；重生的她大彻大悟，女性意识觉醒，霸气十足。且看真诚坦率的傅容@鞠婧祎 如何凭借“预祝梦”的金手指，自立自强，走向人生巅峰。和傅容开启一段翻涌朝权的甜爽之恋吧！ http://t.cn/A6LiHtA4',
+        '@{name} 舞台影视双栖全能偶像鞠婧祎，一番女主剧《芸汐传》爱奇艺播放量破45亿拿下2018年度网剧年亚2020年上星湖南卫视创近三年以来五大卫视白天剧单集最高收视率，主演《新白娘子传奇》31次登顶V榜演员榜日榜🏆荣获2019年年度戏剧潜力艺人，期待待播剧《云上恋歌》《如意芳霏》不畏前路艰险，与尔炽烈同行'
     ]
 
     # 随机评论
@@ -1106,13 +1193,20 @@ if __name__ == '__main__':
     # 自定义用户评论
     user_comments = {
         # 用户id:评论内容
+        '7412589264': random_comment,
+        '7458035434': random_comment,
+        '6906759687': random_comment
     }
 
     # 自定义关键字评论
     keywords_comment = {
         # 关键字:评论内容
+        '异常': random_comment,
+        '勿带链接': random_comment
     }
 
+    # 带上链接
+    random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
     # 默认评论内容
     default_content = random_comment
 
@@ -1165,4 +1259,5 @@ if __name__ == '__main__':
         vip_task_complete(gsid)
         print('*' * 100)
     print('https://m.weibo.cn/detail/' + my_mid)
+    Thread(target=loop_get_mid, args=(cid,)).start()
     loop_comments(loop_comments_num)
