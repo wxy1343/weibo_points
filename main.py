@@ -597,21 +597,21 @@ def loop_get_mid(cid):
 
 
 def write_mid(mid_dict: dict):
-    open('mid_list.json', 'a').close()
-    with open('mid_list.json', 'r') as f1:
+    open('mid.json', 'a').close()
+    with open('mid.json', 'r') as f1:
         try:
             l = [dict(t) for t in set([tuple(d.items()) for d in json.loads(f1.read())])]
         except:
             l = []
-    with open('mid_list.json', 'w+') as f:
+    with open('mid.json', 'w+') as f:
         if mid_dict not in l:
             l.append(mid_dict)
         f.write(json.dumps(l, indent=2))
 
 
 def read_mid():
-    open('mid_list.json', 'a').close()
-    with open('mid_list.json', 'r') as f1:
+    open('mid.json', 'a').close()
+    with open('mid.json', 'r') as f1:
         try:
             l = json.loads(f1.read())
         except:
@@ -1233,6 +1233,7 @@ if __name__ == '__main__':
         clear_log()
         clear_at_file()
         clear_mid_file()
+        cf.Add('配置', 'is_finish', str(False))
         print('正在创建微博')
         my_mid = create_weibo(gen.send(weibo_title), cid)
         if my_mid == False:
