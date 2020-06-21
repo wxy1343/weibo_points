@@ -1076,6 +1076,7 @@ def start_comments():
         is_frequent = True
     print('评论成功数：' + str(com_suc_num))
     print('总评论数：' + str(get_mid_num()))
+    w_gen.send({'等待评论数': None})
     writable = True
     push_wechat('weibo_comments', f'''
                 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
