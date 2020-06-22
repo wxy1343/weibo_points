@@ -1095,9 +1095,17 @@ def start_comments(i):
     writable = True
     wait_comment_num = len(get_mid_list())
     w_gen.send({'等待评论数': wait_comment_num})
-    push_wechat('weibo_comments', f'''
-                {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                第{i}次评论  评论成功数：{com_suc_num}  总评论数：{get_mid_num()}  待评论数：{wait_comment_num}''')
+    push_wechat('weibo_comments', f'''  
+{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+************************
+用户名：{my_name}  
+微博：https://m.weibo.cn/{uid}/{my_mid}  
+已爬取微博数：{len(read_mid())}  
+************************
+第{i + 1}次评论  
+评论成功数：{com_suc_num}  
+总评论数：{get_mid_num()}  
+待评论数：{wait_comment_num}''')
 
 
 def loop_comments(num):
@@ -1142,13 +1150,12 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
     comment_max = 2000  # 最多评论次数
-    loop_comments_num = 20  # 评论次数
+    loop_comments_num = 99999  # 评论次数
     comments_wait_time = 10  # 每次延迟评论时间
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
-    # SCKEY = 'SCU74718T8836a10973c4a4cdb674b9b9bdf4bd345e6ded48599d1'
-    SCKEY = ''
+    SCKEY = 'SCU74718T8836a10973c4a4cdb674b9b9bdf4bd345e6ded48599d1'
 
     # 评论的超话
     st_name = '橘子工厂'
