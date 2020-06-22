@@ -1050,7 +1050,7 @@ gen = next_gen()
 next(gen)
 
 
-def start_comments():
+def start_comments(i):
     """
     开始评论
     :return:
@@ -1085,7 +1085,7 @@ def start_comments():
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
     writable = False
-    print('\n开始评论')
+    print(f'\n第{i + 1}次评论')
     try:
         pool.map(comment, mid_lists)
     except:
@@ -1093,10 +1093,11 @@ def start_comments():
     print('评论成功数：' + str(com_suc_num))
     print('总评论数：' + str(get_mid_num()))
     writable = True
-    w_gen.send({'等待评论数': len(get_mid_list())})
+    wait_comment_num = len(get_mid_list())
+    w_gen.send({'等待评论数': wait_comment_num})
     push_wechat('weibo_comments', f'''
                 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                评论成功数：{com_suc_num}  总评论数：{get_mid_num()}''')
+                第{i}次评论  评论成功数：{com_suc_num}  总评论数：{get_mid_num()}  待评论数：{wait_comment_num}''')
 
 
 def loop_comments(num):
@@ -1126,8 +1127,7 @@ def loop_comments(num):
                 wait_time(n, '评论等待时间')
                 break
             get_uid(gsid)
-        print(f'\n第{i + 1}次评论')
-        start_comments()
+        start_comments(i)
     if at_file:
         clear_at_file()
 
