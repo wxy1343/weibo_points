@@ -1222,7 +1222,8 @@ if __name__ == '__main__':
     keywords_comment = {
         # 关键字:评论内容
         '异常': random_comment,
-        '勿带链接': random_comment
+        '勿带链接': random_comment,
+        '别带链接': random_comment
     }
 
     # 带上链接
