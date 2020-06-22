@@ -161,6 +161,9 @@ def comment(args):
                     # 微博不存在或暂无查看权限
                     elif errno == '20101':
                         mid_write_file(mid)
+                    # 由于作者隐私设置，你没有权限评论此微博
+                    elif errno == '20130':
+                        mid_write_file(mid)
 
             return False
     except SystemExit:
@@ -600,9 +603,10 @@ def get_mid(cid):
 
 def loop_get_mid(cid):
     while True:
-        get_mid(cid)
+        w_gen.send({'等待评论数': len(get_mid_list())})
         t = gen.send(get_weibo_time)
         wait_time(t, '获取微博等待时间')
+        get_mid(cid)
 
 
 def write_mid(mid_dict: dict):
@@ -630,33 +634,24 @@ def read_mid():
 
 def get_mid_list():
     mid_list = []
-    n = 0
-    while mid_list == []:
-        get_mid_max_r = gen.send(get_mid_max)
-        for mid_dict in read_mid():
-            comments = True
-            screen_name = mid_dict['screen_name']
-            text = mid_dict['text']
-            user_id = mid_dict['user_id']
-            mid = mid_dict['mid']
-            if at_file:
-                at_gen.send(screen_name)
-            if at_comment and '@' + my_name in text:
-                pass
-            else:
-                if comment_following and not following_in_file(user_id):
-                    comments = False
-                if comment_follow_me and not fans_in_file(user_id):
-                    comments = False
-            if comments and mid != my_mid and not mid_in_file(mid) and user_id != uid:
-                mid_list.append((mid, user_id, text, screen_name))
-        if mid_list == []:
-            w_gen.send({'未有新微博': n})
-            n += 1
-            time.sleep(1)
-    w_gen.send({'未有新微博': None})
-    w_gen.send({'等待评论数': len(mid_list)})
-    return mid_list[:get_mid_max_r]
+    for mid_dict in read_mid():
+        comments = True
+        screen_name = mid_dict['screen_name']
+        text = mid_dict['text']
+        user_id = mid_dict['user_id']
+        mid = mid_dict['mid']
+        if at_file:
+            at_gen.send(screen_name)
+        if at_comment and '@' + my_name in text:
+            pass
+        else:
+            if comment_following and not following_in_file(user_id):
+                comments = False
+            if comment_follow_me and not fans_in_file(user_id):
+                comments = False
+        if comments and mid != my_mid and not mid_in_file(mid) and user_id != uid:
+            mid_list.append((mid, user_id, text, screen_name))
+    return mid_list
 
 
 def get_my_mid():
@@ -1063,9 +1058,21 @@ def start_comments():
     global com_suc_num
     global is_frequent
     global writable
-    mid_list = get_mid_list()
+    get_mid_max_r = gen.send(get_mid_max)
+    n = 0
+    mid_list = []
+    while not mid_list:
+        mid_list = get_mid_list()
+        if not mid_list:
+            w_gen.send({'没有新微博': n})
+            n += 1
+        else:
+            w_gen.send({'没有新微博': None})
+            break
+        time.sleep(1)
+    w_gen.send({'等待评论数': len(mid_list)})
     mid_lists = []
-    for mid, user_id, text, name in mid_list:
+    for mid, user_id, text, name in mid_list[:get_mid_max_r]:
         while True:
             content = gen.send(default_content)
             for key in keywords_comment.keys():
@@ -1085,8 +1092,8 @@ def start_comments():
         is_frequent = True
     print('评论成功数：' + str(com_suc_num))
     print('总评论数：' + str(get_mid_num()))
-    w_gen.send({'等待评论数': None})
     writable = True
+    w_gen.send({'等待评论数': len(get_mid_list())})
     push_wechat('weibo_comments', f'''
                 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
                 评论成功数：{com_suc_num}  总评论数：{get_mid_num()}''')
@@ -1119,13 +1126,14 @@ def loop_comments(num):
                 wait_time(n, '评论等待时间')
                 break
             get_uid(gsid)
+        print(f'\n第{i + 1}次评论')
         start_comments()
     if at_file:
         clear_at_file()
 
 
 if __name__ == '__main__':
-    wait_zero()  # 等待零点执行
+    # wait_zero()  # 等待零点执行
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
     at_file = False  # @超话里的用户保存到文件
@@ -1134,8 +1142,8 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
     comment_max = 2000  # 最多评论次数
-    loop_comments_num = 20  # 运行次数
-    comments_wait_time = 10  # 每次延迟运行时间
+    loop_comments_num = 20  # 评论次数
+    comments_wait_time = 10  # 每次延迟评论时间
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
@@ -1146,7 +1154,7 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
 
     # 发送微博的标题
-    weibo_title = f'#{st_name}[超话]##鞠婧祎618超拼夜#jjy#鞠婧祎如意芳霏# @鞠婧祎 鞠婧祎云上恋歌🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#'
+    weibo_title = f'#{st_name}[超话]##鞠婧祎漂亮书生#jjy#鞠婧祎如意芳霏# @鞠婧祎鞠婧祎漂亮书生🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#'
 
     # 需要发送的群聊的id
     gid_list = [
@@ -1162,7 +1170,7 @@ if __name__ == '__main__':
 
     # 随机评论列表
     random_list = [
-        '@{name} #鞠婧祎618超拼夜#jjy#鞠婧祎如意芳霏# @鞠婧祎 鞠婧祎云上恋歌🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#',
+        '@{name} #鞠婧祎漂亮书生#jjy#鞠婧祎如意芳霏# @鞠婧祎鞠婧祎漂亮书生🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#',
         '@{name} 【鞠婧祎云上恋歌】🍊【鞠婧祎如意芳霏】🍊【鞠婧祎芸汐传】🍊【鞠婧祎恋爱告急】🍊【鞠婧祎叹云兮】🍊【鞠婧祎壁纸】🍊【鞠婧祎头像】🍊【鞠婧祎穿搭】🍊 【鞠婧祎美图】',
         '@{name} 神仙颜值鞠婧祎✨💜人间理想鞠婧祎✨💛温柔体贴鞠婧祎✨💚治愈微笑鞠婧祎✨💙不可替代鞠婧祎✨❤深得我心鞠婧祎✨💜星辰皓月鞠婧祎✨💛金光闪闪鞠婧祎✨💚一见钟情鞠婧祎✨💙宝藏女孩鞠婧祎✨❤',
         '@{name} 鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎',
@@ -1266,5 +1274,7 @@ if __name__ == '__main__':
         vip_task_complete(gsid)
         print('*' * 100)
     print('https://m.weibo.cn/detail/' + my_mid)
-    Thread(target=loop_get_mid, args=(cid,)).start()
+    t_loop_get_mid = Thread(target=loop_get_mid, args=(cid,))
+    t_loop_get_mid.setDaemon(True)
+    t_loop_get_mid.start()
     loop_comments(loop_comments_num)
