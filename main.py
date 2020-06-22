@@ -1131,7 +1131,7 @@ def loop_comments(num):
                 print()
                 is_frequent = False
             else:
-                n = comments_wait_time
+                n = loop_comments_time
                 wait_time(n, '评论等待时间')
                 break
             get_uid(gsid)
@@ -1150,8 +1150,8 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
     comment_max = 2000  # 最多评论次数
-    loop_comments_num = 99999  # 评论次数
-    comments_wait_time = 10  # 每次延迟评论时间
+    loop_comments_num = 99999  # 循环评论次数
+    loop_comments_time = 10  # 每次循环评论等待时间
     frequent_wait_time = 600  # 频繁等待时间
 
     # 微信推送 http://sc.ftqq.com
