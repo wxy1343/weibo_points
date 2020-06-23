@@ -15,6 +15,7 @@ lock = Lock()
 pool = Pool(100)
 is_frequent = False
 writable = True
+is_finish = False
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0'}
 cf = Config('config.ini', '配置')
 
@@ -537,6 +538,7 @@ def get_mid(cid):
         return len([i for i in read_mid() if 'mid' in i.keys() and mid == i['mid']]) == 1
 
     def analysis_and_join_list(mblog):
+        global is_finish
         time_state = mblog['created_at']
         try:
             t = mblog['latest_update']
@@ -548,14 +550,13 @@ def get_mid(cid):
         user_id = str(mblog['user']['id'])
         screen_name = mblog['user']['screen_name']
         if not after_zero(t):
-            cf.Add('配置', 'is_finish', str(True))
+            is_finish = True
             return
         if is_finish and mid_in_file(mid):
             return
         write_mid({'mid': mid, 'user_id': user_id, 'text': text, 'screen_name': screen_name})
         return True
 
-    is_finish = cf.GetBool('配置', 'is_finish')
     since_id = ''
     req = requests.Session()
     req.headers = headers
@@ -1069,10 +1070,7 @@ def start_comments(i):
         else:
             w_gen.send({'没有新微博': None})
             if len(mid_list) >= start_comment_num:
-                w_gen.send({'等待开始评论的评论数量': None})
                 break
-            else:
-                w_gen.send({'等待开始评论的评论数量': start_comment_num})
         time.sleep(1)
     w_gen.send({'等待评论数': len(mid_list)})
     mid_lists = []
@@ -1144,7 +1142,7 @@ def loop_comments(num):
 
 
 if __name__ == '__main__':
-    wait_zero()  # 等待零点执行
+    # wait_zero()  # 等待零点执行
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
     at_file = False  # @超话里的用户保存到文件
@@ -1258,7 +1256,6 @@ if __name__ == '__main__':
         clear_at_file()
         clear_mid_file()
         clear_mid_json()
-        cf.Add('配置', 'is_finish', str(False))
         print('正在创建微博')
         my_mid = create_weibo(gen.send(weibo_title), cid)
         if my_mid == False:
