@@ -1068,7 +1068,11 @@ def start_comments(i):
             n += 1
         else:
             w_gen.send({'没有新微博': None})
-            break
+            if len(mid_list) >= start_comment_num:
+                w_gen.send({'等待开始评论的评论数量': None})
+                break
+            else:
+                w_gen.send({'等待开始评论的评论数量': start_comment_num})
         time.sleep(1)
     w_gen.send({'等待评论数': len(mid_list)})
     mid_lists = []
@@ -1124,9 +1128,8 @@ def loop_comments(num):
         while True:
             if is_frequent:
                 n = frequent_wait_time
-                push_wechat('weibo_comments', f'''
-                            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-                            请求过于频繁,正在等待{n}秒''')
+                push_wechat('weibo_comments', f'''{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
+请求过于频繁,正在等待{n}秒''')
                 wait_time(n, '频繁等待时间')
                 print()
                 is_frequent = False
@@ -1141,7 +1144,7 @@ def loop_comments(num):
 
 
 if __name__ == '__main__':
-    # wait_zero()  # 等待零点执行
+    wait_zero()  # 等待零点执行
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
     at_file = False  # @超话里的用户保存到文件
@@ -1149,6 +1152,7 @@ if __name__ == '__main__':
     at_comment = False  # 是否评论@自己的
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
+    start_comment_num = 10  # 开始评论的评论数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 99999  # 循环评论次数
     loop_comments_time = 10  # 每次循环评论等待时间
