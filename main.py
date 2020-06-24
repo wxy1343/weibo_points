@@ -1062,14 +1062,14 @@ def start_comments(i):
     get_mid_max_r = gen.send(get_mid_max)
     n = 0
     mid_list = []
-    while not mid_list:
+    while True:
         mid_list = get_mid_list()
         if not mid_list:
             w_gen.send({'没有新微博': n})
             n += 1
         else:
             w_gen.send({'没有新微博': None})
-            if len(mid_list) >= start_comment_num:
+            if len(mid_list) >= gen.send(start_comment_num):
                 break
         time.sleep(1)
     w_gen.send({'等待评论数': len(mid_list)})
@@ -1150,7 +1150,7 @@ if __name__ == '__main__':
     at_comment = False  # 是否评论@自己的
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
-    start_comment_num = 10  # 开始评论的评论数量
+    start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 99999  # 循环评论次数
     loop_comments_time = 10  # 每次循环评论等待时间
