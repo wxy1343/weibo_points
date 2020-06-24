@@ -1061,7 +1061,6 @@ def start_comments(i):
     global writable
     get_mid_max_r = gen.send(get_mid_max)
     n = 0
-    mid_list = []
     while True:
         mid_list = get_mid_list()
         if not mid_list:
@@ -1072,7 +1071,6 @@ def start_comments(i):
             if len(mid_list) >= gen.send(start_comment_num):
                 break
         time.sleep(1)
-    w_gen.send({'等待评论数': len(mid_list)})
     mid_lists = []
     for mid, user_id, text, name in mid_list[:get_mid_max_r]:
         while True:
