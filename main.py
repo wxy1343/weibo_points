@@ -419,7 +419,8 @@ def wait_time(n, text='等待时间'):
         with lock:
             w_gen.send({text: n})
         n -= 1
-    w_gen.send({text: None})
+    with lock:
+        w_gen.send({text: None})
 
 
 def get_follow():
@@ -597,6 +598,7 @@ def get_mid(cid):
                     w_gen.send({'正在爬取页数': None})
                     return
             since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
+            w_gen.send({'等待评论数': len(get_mid_list())})
         except:
             pass
         i += 1
@@ -604,7 +606,6 @@ def get_mid(cid):
 
 def loop_get_mid(cid):
     while True:
-        w_gen.send({'等待评论数': len(get_mid_list())})
         t = gen.send(get_weibo_time)
         wait_time(t, '获取微博等待时间')
         get_mid(cid)
