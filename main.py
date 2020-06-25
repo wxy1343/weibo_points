@@ -598,14 +598,15 @@ def get_mid(cid):
                     w_gen.send({'正在爬取页数': None})
                     return
             since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
-            w_gen.send({'等待评论数': len(get_mid_list())})
         except:
             pass
+        w_gen.send({'等待评论数': len(get_mid_list())})
         i += 1
 
 
 def loop_get_mid(cid):
     while True:
+        w_gen.send({'等待评论数': len(get_mid_list())})
         t = gen.send(get_weibo_time)
         wait_time(t, '获取微博等待时间')
         get_mid(cid)
@@ -1120,6 +1121,7 @@ def loop_comments(num):
     global my_name
     for i in range(num):
         get_uid(gsid)
+        w_gen.send({'等待评论数': len(get_mid_list())})
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
         while True:
