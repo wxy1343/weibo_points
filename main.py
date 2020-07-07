@@ -407,6 +407,10 @@ def get_weibo_info(gsid):
 
 
 def get_my_name():
+    """
+    获取自己的名字
+    :return: 
+    """
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
     r = requests.get(url)
     try:
@@ -432,7 +436,15 @@ def wait_time(n, text='等待时间'):
 
 
 def get_follow():
+    """
+    获取粉丝和关注列表
+    :return: 
+    """
     def get_following_list():
+        """
+        获取关注列表
+        :return: 
+        """
         following_list = []
         page = 1
         cookies = {'SUB': gsid}
@@ -462,6 +474,10 @@ def get_follow():
         return following_list
 
     def get_fans_list():
+        """
+        获取粉丝列表
+        :return: 
+        """
         fans_list = []
         cookies = {'SUB': gsid}
         since_id = ''
@@ -503,6 +519,10 @@ def get_follow():
 
 
 def at_weibo_gen():
+    """
+    at生成器
+    :return: 
+    """
     while True:
         name = yield
         if not at_in_file(name):
@@ -519,6 +539,10 @@ next(at_gen)
 
 
 def write_gen():
+    """
+    生成器并行输出
+    :return: 
+    """
     l = {}
     while True:
         d = yield
@@ -617,6 +641,11 @@ def get_mid(cid):
 
 
 def loop_get_mid(cid):
+    """
+    循环爬取mid
+    :param cid: 
+    :return: 
+    """
     while True:
         with lock:
             w_gen.send({'等待评论数': len(get_mid_list())})
@@ -626,6 +655,11 @@ def loop_get_mid(cid):
 
 
 def write_mid(mid_dict: dict):
+    """
+    把mid写入文件
+    :param mid_dict: 
+    :return: 
+    """
     open('mid.json', 'a').close()
     with open('mid.json', 'r') as f1:
         try:
@@ -639,6 +673,10 @@ def write_mid(mid_dict: dict):
 
 
 def read_mid():
+    """
+    读取mid列表文件
+    :return: 
+    """
     open('mid.json', 'a').close()
     with open('mid.json', 'r') as f1:
         try:
@@ -649,6 +687,10 @@ def read_mid():
 
 
 def get_mid_list():
+    """
+    获取未评论的mid列表
+    :return: 
+    """
     mid_list = []
     for mid_dict in read_mid():
         comments = True
@@ -1075,6 +1117,11 @@ next(gen)
 
 
 def zero_handle(run=False):
+    """
+    零点执行
+    :param run: 
+    :return: 
+    """
     global my_mid
     while True:
         while not run and get_time_after_zero() != 0:
