@@ -5,8 +5,9 @@ import random
 import re
 import sys
 import time
+import os
 from multiprocessing.dummy import Pool
-from threading import Lock, Thread, RLock
+from threading import Lock, Thread
 import requests
 from bs4 import BeautifulSoup
 from config import Config
@@ -28,7 +29,7 @@ def create_weibo(text, cid):
     :return:
     """
 
-    def add_config():
+    def add_config(mid):
         cf.Add('配置', 'mid', mid)
         cf.Add('配置', 'time', str(time.time()))
 
@@ -37,7 +38,7 @@ def create_weibo(text, cid):
             mid = info['mid']
             title = info['title']
             if title == weibo_title:
-                add_config()
+                add_config(mid)
                 return mid
         else:
             print('创建微博失败,正在重试')
@@ -60,7 +61,7 @@ def create_weibo(text, cid):
         return retry()
     if r.json()['code'] == '100000':
         mid = r.json()['data']['mid']
-        add_config()
+        add_config(mid)
         return mid
     elif r.json()['code'] == '20019':
         return retry()
@@ -141,12 +142,15 @@ def comment(args):
                     # 已经评论
                     elif errno == '20019':
                         mid_write_file(mid)
+                        com_suc_num += 1
                     # 只允许粉丝评论
                     elif errno == '20210':
                         mid_write_file(mid)
+                        com_suc_num += 1
                     # 只允许关注用户评论
                     elif errno == '20206':
                         mid_write_file(mid)
+                        com_suc_num += 1
                     # 发微博太多
                     elif errno == '20016':
                         exit()
@@ -159,17 +163,21 @@ def comment(args):
                     # 在黑名单中，无法进行评论
                     elif errno == '20205':
                         mid_write_file(mid)
+                        com_suc_num += 1
                     # 微博不存在或暂无查看权限
                     elif errno == '20101':
                         mid_write_file(mid)
+                        com_suc_num += 1
                     # 由于作者隐私设置，你没有权限评论此微博
                     elif errno == '20130':
                         mid_write_file(mid)
+                        com_suc_num += 1
 
             return False
     except SystemExit:
-        import os
         # 退出进程
+        push_wechat('weibo_comments', f'''{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
+{errno}:{r.json()['msg']}''')
         os._exit(int(errno))
     except:
         with lock:
@@ -563,7 +571,8 @@ def get_mid(cid):
     req.headers = headers
     i = 1
     while True:
-        w_gen.send({'正在爬取页数': i})
+        with lock:
+            w_gen.send({'正在爬取页数': i})
         url = f'https://m.weibo.cn/api/container/getIndex?containerid={cid}_-_sort_time' + since_id
         wait_time = 0.5
         while True:
@@ -589,24 +598,28 @@ def get_mid(cid):
                 card_page = 1
                 mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
                 if analysis_and_join_list(mblog) is None:
-                    w_gen.send({'正在爬取页数': None})
+                    with lock:
+                        w_gen.send({'正在爬取页数': None})
                     return
             card_group = r.json()['data']['cards'][card_page]['card_group']
             for j in card_group:
                 mblog = j['mblog']
                 if analysis_and_join_list(mblog) is None:
-                    w_gen.send({'正在爬取页数': None})
+                    with lock:
+                        w_gen.send({'正在爬取页数': None})
                     return
             since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
         except:
             pass
-        w_gen.send({'等待评论数': len(get_mid_list())})
+        with lock:
+            w_gen.send({'等待评论数': len(get_mid_list())})
         i += 1
 
 
 def loop_get_mid(cid):
     while True:
-        w_gen.send({'等待评论数': len(get_mid_list())})
+        with lock:
+            w_gen.send({'等待评论数': len(get_mid_list())})
         t = gen.send(get_weibo_time)
         wait_time(t, '获取微博等待时间')
         get_mid(cid)
@@ -701,20 +714,25 @@ def is_today(t=None):
         return False
 
 
+def get_time_after_zero():
+    """
+    获取零点后的秒数
+    :return:
+    """
+    return int(time.time() - time.timezone) % 86400
+
+
 def wait_zero():
     """
     等待零点
     :return:
     """
-    t1 = 0
     while True:
-        t = int(time.time() - time.timezone) % 86400
-        sys.stdout.write(f'\r距离零点：{str(86400 - t)}s')
-        if t1 > t:
+        t = get_time_after_zero()
+        if t == 0:
             print()
             break
-        else:
-            t1 = t
+        sys.stdout.write(f'\r距离零点：{86400 - t}s')
         time.sleep(0.1)
 
 
@@ -843,7 +861,10 @@ def vip_sign(gsid):
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
         logging.warning(str(r.status_code))
-    print(r.json()['msg'])
+    try:
+        print(r.json()['msg'])
+    except:
+        pass
 
 
 def vip_pk(gsid):
@@ -1053,6 +1074,45 @@ gen = next_gen()
 next(gen)
 
 
+def zero_handle(run=False):
+    global my_mid
+    while True:
+        while not run and get_time_after_zero() != 0:
+            time.sleep(0.5)
+        clear_log()
+        clear_at_file()
+        clear_mid_file()
+        clear_mid_json()
+        print('正在创建微博')
+        my_mid = create_weibo(gen.send(weibo_title), cid)
+        if my_mid == False:
+            print('创建失败')
+            os._exit()
+        else:
+            print('创建成功')
+            # 发送微博到群组
+            for gid in gid_list:
+                group_chat_comments(gid)
+        print('*' * 100)
+        print('获取每日vip签到成长值')
+        vip_sign(gsid)
+        print('*' * 100)
+        print('获取vip pk成长值')
+        vip_pk(gsid)
+        print('*' * 100)
+        print('获取超话登录积分')
+        login_integral(gsid)
+        print('*' * 100)
+        print('获取每日签到积分')
+        sign_integral(gsid)
+        print('*' * 100)
+        print('获取完成所有vip任务成长值')
+        vip_task_complete(gsid)
+        print('*' * 100)
+        if run:
+            break
+
+
 def start_comments(i):
     """
     开始评论
@@ -1066,10 +1126,12 @@ def start_comments(i):
     while True:
         mid_list = get_mid_list()
         if not mid_list:
-            w_gen.send({'没有新微博': n})
+            with lock:
+                w_gen.send({'没有新微博': n})
             n += 1
         else:
-            w_gen.send({'没有新微博': None})
+            with lock:
+                w_gen.send({'没有新微博': None})
             if len(mid_list) >= gen.send(start_comment_num):
                 break
         time.sleep(1)
@@ -1096,7 +1158,8 @@ def start_comments(i):
     print('总评论数：' + str(get_mid_num()))
     writable = True
     wait_comment_num = len(get_mid_list())
-    w_gen.send({'等待评论数': wait_comment_num})
+    with lock:
+        w_gen.send({'等待评论数': wait_comment_num})
     push_wechat('weibo_comments', f'''  
 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
 ************************
@@ -1121,7 +1184,8 @@ def loop_comments(num):
     global my_name
     for i in range(num):
         get_uid(gsid)
-        w_gen.send({'等待评论数': len(get_mid_list())})
+        with lock:
+            w_gen.send({'等待评论数': len(get_mid_list())})
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
         while True:
@@ -1150,7 +1214,7 @@ if __name__ == '__main__':
     at_edit_weibo = False  # 自动修改微博文案@超话里的用户，要先开at_file
     at_comment = False  # 是否评论@自己的
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
-    get_weibo_time = random_gen(range(5, 10))  # 获取微博等待时间
+    get_weibo_time = random_gen(range(10, 20))  # 获取微博等待时间
     start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 99999  # 循环评论次数
@@ -1164,14 +1228,13 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
 
     # 发送微博的标题
-    weibo_title = f'#{st_name}[超话]##鞠婧祎漂亮书生#jjy#鞠婧祎如意芳霏# @鞠婧祎鞠婧祎漂亮书生🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#'
+    weibo_title = f'#{st_name}[超话]##鞠婧祎漂亮书生# jjy#鞠婧祎如意芳霏# jjy#鞠婧祎青春环游记# @鞠婧祎 🍊鞠婧祎雪文曦🍊鞠婧祎傅容🍊'
 
     # 需要发送的群聊的id
     gid_list = [
         '4422005636073296',  # 鞠婧祎官方粉丝群
         '4359568601971447',  # 鞠婧祎粉丝交流1群
         '4396116282389771',  # 鞠婧祎粉丝交流3群
-        '4136736277648321'  # 鞠婧祎话题报刊亭
     ]
 
     # 微博链接
@@ -1180,7 +1243,7 @@ if __name__ == '__main__':
 
     # 随机评论列表
     random_list = [
-        '@{name} #鞠婧祎漂亮书生#jjy#鞠婧祎如意芳霏# @鞠婧祎鞠婧祎漂亮书生🍊 鞠婧祎雪文曦🍊 鞠婧祎如意芳霏🍊 鞠婧祎傅容🍊 #鞠婧祎0618生日快乐#',
+        '@{name} #鞠婧祎漂亮书生# jjy#鞠婧祎如意芳霏# jjy#鞠婧祎青春环游记# @鞠婧祎 🍊鞠婧祎雪文曦🍊鞠婧祎傅容🍊',
         '@{name} 【鞠婧祎云上恋歌】🍊【鞠婧祎如意芳霏】🍊【鞠婧祎芸汐传】🍊【鞠婧祎恋爱告急】🍊【鞠婧祎叹云兮】🍊【鞠婧祎壁纸】🍊【鞠婧祎头像】🍊【鞠婧祎穿搭】🍊 【鞠婧祎美图】',
         '@{name} 神仙颜值鞠婧祎✨💜人间理想鞠婧祎✨💛温柔体贴鞠婧祎✨💚治愈微笑鞠婧祎✨💙不可替代鞠婧祎✨❤深得我心鞠婧祎✨💜星辰皓月鞠婧祎✨💛金光闪闪鞠婧祎✨💚一见钟情鞠婧祎✨💙宝藏女孩鞠婧祎✨❤',
         '@{name} 鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎',
@@ -1218,7 +1281,8 @@ if __name__ == '__main__':
         # 用户id:评论内容
         '7412589264': random_comment,
         '7458035434': random_comment,
-        '6906759687': random_comment
+        '6906759687': random_comment,
+        '7435359022': '鞠婧祎'
     }
 
     # 自定义关键字评论
@@ -1253,38 +1317,13 @@ if __name__ == '__main__':
         else:
             print('读取成功')
     else:
-        clear_log()
-        clear_at_file()
-        clear_mid_file()
-        clear_mid_json()
-        print('正在创建微博')
-        my_mid = create_weibo(gen.send(weibo_title), cid)
-        if my_mid == False:
-            print('创建失败')
-            exit()
-        else:
-            print('创建成功')
-            # 发送微博到群组
-            for gid in gid_list:
-                group_chat_comments(gid)
-        print('*' * 100)
-        print('获取每日vip签到成长值')
-        vip_sign(gsid)
-        print('*' * 100)
-        print('获取vip pk成长值')
-        vip_pk(gsid)
-        print('*' * 100)
-        print('获取超话登录积分')
-        login_integral(gsid)
-        print('*' * 100)
-        print('获取每日签到积分')
-        sign_integral(gsid)
-        print('*' * 100)
-        print('获取完成所有vip任务成长值')
-        vip_task_complete(gsid)
-        print('*' * 100)
+        zero_handle(True)
     print('https://m.weibo.cn/detail/' + my_mid)
     t_loop_get_mid = Thread(target=loop_get_mid, args=(cid,))
     t_loop_get_mid.setDaemon(True)
     t_loop_get_mid.start()
-    loop_comments(loop_comments_num)
+    t_loop_zero_handle = Thread(target=zero_handle)
+    t_loop_zero_handle.setDaemon(True)
+    t_loop_zero_handle.start()
+    t_loop_comments = Thread(target=loop_comments, args=(loop_comments_num,))
+    t_loop_comments.start()
