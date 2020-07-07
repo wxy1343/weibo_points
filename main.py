@@ -15,6 +15,7 @@ from config import Config
 lock = Lock()
 pool = Pool(100)
 is_frequent = False
+is_too_many_weibo = False
 writable = True
 is_finish = False
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0'}
@@ -59,11 +60,14 @@ def create_weibo(text, cid):
     except:
         logging.warning(str(r.status_code) + ':' + r.text)
         return retry()
-    if r.json()['code'] == '100000':
+    code = r.json()['code']
+    if code == '100000':
         mid = r.json()['data']['mid']
         add_config(mid)
         return mid
-    elif r.json()['code'] == '20019':
+    elif code == '100001':
+        return False
+    elif code == '20019':
         return retry()
     else:
         print(r.json()['msg'])
@@ -78,6 +82,7 @@ def comment(args):
     """
     global com_suc_num
     global is_frequent
+    global is_too_many_weibo
     mid, content = args
     detail_url = 'https://m.weibo.cn/detail/' + mid
     if get_mid_num() >= comment_max:
@@ -153,7 +158,7 @@ def comment(args):
                         com_suc_num += 1
                     # 发微博太多
                     elif errno == '20016':
-                        exit()
+                        is_too_many_weibo = True
                     # 异常
                     elif errno == '200002':
                         exit()
@@ -409,7 +414,7 @@ def get_weibo_info(gsid):
 def get_my_name():
     """
     获取自己的名字
-    :return: 
+    :return:
     """
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
     r = requests.get(url)
@@ -438,12 +443,13 @@ def wait_time(n, text='等待时间'):
 def get_follow():
     """
     获取粉丝和关注列表
-    :return: 
+    :return:
     """
+
     def get_following_list():
         """
         获取关注列表
-        :return: 
+        :return:
         """
         following_list = []
         page = 1
@@ -476,7 +482,7 @@ def get_follow():
     def get_fans_list():
         """
         获取粉丝列表
-        :return: 
+        :return:
         """
         fans_list = []
         cookies = {'SUB': gsid}
@@ -521,7 +527,7 @@ def get_follow():
 def at_weibo_gen():
     """
     at生成器
-    :return: 
+    :return:
     """
     while True:
         name = yield
@@ -541,7 +547,7 @@ next(at_gen)
 def write_gen():
     """
     生成器并行输出
-    :return: 
+    :return:
     """
     l = {}
     while True:
@@ -643,8 +649,8 @@ def get_mid(cid):
 def loop_get_mid(cid):
     """
     循环爬取mid
-    :param cid: 
-    :return: 
+    :param cid:
+    :return:
     """
     while True:
         with lock:
@@ -657,8 +663,8 @@ def loop_get_mid(cid):
 def write_mid(mid_dict: dict):
     """
     把mid写入文件
-    :param mid_dict: 
-    :return: 
+    :param mid_dict:
+    :return:
     """
     open('mid.json', 'a').close()
     with open('mid.json', 'r') as f1:
@@ -675,7 +681,7 @@ def write_mid(mid_dict: dict):
 def read_mid():
     """
     读取mid列表文件
-    :return: 
+    :return:
     """
     open('mid.json', 'a').close()
     with open('mid.json', 'r') as f1:
@@ -689,7 +695,7 @@ def read_mid():
 def get_mid_list():
     """
     获取未评论的mid列表
-    :return: 
+    :return:
     """
     mid_list = []
     for mid_dict in read_mid():
@@ -1119,23 +1125,29 @@ next(gen)
 def zero_handle(run=False):
     """
     零点执行
-    :param run: 
-    :return: 
+    :param run:
+    :return:
     """
     global my_mid
+    global is_too_many_weibo
     while True:
         while not run and get_time_after_zero() != 0:
             time.sleep(0.5)
         clear_log()
-        clear_at_file()
+        if at_file:
+            clear_at_file()
         clear_mid_file()
         clear_mid_json()
         print('正在创建微博')
-        my_mid = create_weibo(gen.send(weibo_title), cid)
-        if my_mid == False:
+        mid = create_weibo(gen.send(weibo_title), cid)
+        if mid == False:
             print('创建失败')
-            os._exit()
+            is_too_many_weibo = True
+            if 'my_mid' not in dir():
+                my_mid = get_my_mid()
+            break
         else:
+            my_mid = mid
             print('创建成功')
             # 发送微博到群组
             for gid in gid_list:
@@ -1228,6 +1240,7 @@ def loop_comments(num):
     """
     global uid
     global is_frequent
+    global is_too_many_weibo
     global my_name
     for i in range(num):
         get_uid(gsid)
@@ -1235,20 +1248,24 @@ def loop_comments(num):
             w_gen.send({'等待评论数': len(get_mid_list())})
         if get_mid_num() >= comment_max:
             print(f'你已经评论{comment_max}条了')
-        while True:
-            if is_frequent:
-                n = frequent_wait_time
-                push_wechat('weibo_comments', f'''{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
-请求过于频繁,正在等待{n}秒''')
-                wait_time(n, '频繁等待时间')
-                print()
-                is_frequent = False
-            else:
-                n = loop_comments_time
-                wait_time(n, '评论等待时间')
-                break
-            get_uid(gsid)
-        start_comments(i)
+        while is_too_many_weibo:
+            wait_time(too_many_weibo_wait_time, '发微博太多等待时间')
+            is_too_many_weibo = False
+            if not is_today():
+                zero_handle(True)
+        else:
+            while True:
+                if is_frequent:
+                    push_wechat('weibo_comments', f'''{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
+    请求过于频繁,正在等待{frequent_wait_time}秒''')
+                    wait_time(frequent_wait_time, '频繁等待时间')
+                    print()
+                    is_frequent = False
+                else:
+                    wait_time(loop_comments_time, '评论等待时间')
+                    break
+                get_uid(gsid)
+            start_comments(i)
     if at_file:
         clear_at_file()
 
@@ -1267,6 +1284,7 @@ if __name__ == '__main__':
     loop_comments_num = 99999  # 循环评论次数
     loop_comments_time = 10  # 每次循环评论等待时间
     frequent_wait_time = 600  # 频繁等待时间
+    too_many_weibo_wait_time = 3600 * 6  # 发微博太多等待时间
 
     # 微信推送 http://sc.ftqq.com
     SCKEY = 'SCU74718T8836a10973c4a4cdb674b9b9bdf4bd345e6ded48599d1'
