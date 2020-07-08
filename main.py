@@ -1152,6 +1152,7 @@ def zero_handle(run=False):
         else:
             my_mid = mid
             print('创建成功')
+            print('https://m.weibo.cn/detail/' + my_mid)
             # 发送微博到群组
             for gid in gid_list:
                 group_chat_comments(gid)
@@ -1390,9 +1391,10 @@ if __name__ == '__main__':
             exit()
         else:
             print('读取成功')
+            print('https://m.weibo.cn/detail/' + my_mid)
     else:
         zero_handle(True)
-    print('https://m.weibo.cn/detail/' + my_mid)
+
     t_loop_get_mid = Thread(target=loop_get_mid, args=(cid,))
     t_loop_get_mid.setDaemon(True)
     t_loop_get_mid.start()
