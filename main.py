@@ -778,9 +778,9 @@ def wait_zero():
     while True:
         t = get_time_after_zero()
         if t == 0:
-            print()
+            w_gen.send({'距离零点': None})
             break
-        sys.stdout.write(f'\r距离零点：{86400 - t}s')
+        w_gen.send({'距离零点': f'{86400 - t}s'})
         time.sleep(0.1)
 
 
@@ -1129,6 +1129,7 @@ def zero_handle(run=False):
     :return:
     """
     global my_mid
+    global writable
     global is_too_many_weibo
     while True:
         while not run and get_time_after_zero() != 0:
@@ -1138,6 +1139,7 @@ def zero_handle(run=False):
             clear_at_file()
         clear_mid_file()
         clear_mid_json()
+        writable = False
         print('正在创建微博')
         mid = create_weibo(gen.send(weibo_title), cid)
         if mid == False:
@@ -1145,6 +1147,7 @@ def zero_handle(run=False):
             is_too_many_weibo = True
             if 'my_mid' not in dir():
                 my_mid = get_my_mid()
+            writable = True
             break
         else:
             my_mid = mid
@@ -1168,6 +1171,7 @@ def zero_handle(run=False):
         print('获取完成所有vip任务成长值')
         vip_task_complete(gsid)
         print('*' * 100)
+        writable = True
         if run:
             break
 
@@ -1191,6 +1195,8 @@ def start_comments(i):
         else:
             with lock:
                 w_gen.send({'没有新微博': None})
+            if (86400 - last_comment_for_zero_time) < get_time_after_zero():
+                break
             if len(mid_list) >= gen.send(start_comment_num):
                 break
         time.sleep(1)
@@ -1230,6 +1236,8 @@ def start_comments(i):
 评论成功数：{com_suc_num}  
 总评论数：{get_mid_num()}  
 待评论数：{wait_comment_num}''')
+    if (86400 - last_comment_for_zero_time) < get_time_after_zero():
+        wait_zero()
 
 
 def loop_comments(num):
@@ -1280,6 +1288,7 @@ if __name__ == '__main__':
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(10, 20))  # 获取微博等待时间
     start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
+    last_comment_for_zero_time = 600  # 距离0点前开始今天最后一次评论的时间
     comment_max = 2000  # 最多评论次数
     loop_comments_num = 99999  # 循环评论次数
     loop_comments_time = 10  # 每次循环评论等待时间
