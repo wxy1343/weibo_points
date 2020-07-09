@@ -1142,10 +1142,13 @@ def zero_handle(run=False):
         clear_mid_file()
         clear_mid_json()
         writable = False
-        print('正在创建微博')
+        if not run:
+            print()
+        print()
+        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|正在创建微博')
         mid = create_weibo(gen.send(weibo_title), cid)
         if mid == False:
-            print('创建失败')
+            print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建失败')
             is_too_many_weibo = True
             if 'my_mid' not in dir():
                 my_mid = get_my_mid()
@@ -1153,7 +1156,7 @@ def zero_handle(run=False):
             break
         else:
             my_mid = mid
-            print('创建成功')
+            print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建成功')
             print('https://m.weibo.cn/detail/' + my_mid)
             # 发送微博到群组
             for gid in gid_list:
@@ -1217,11 +1220,12 @@ def start_comments(i):
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
     writable = False
-    print(f'\n第{i + 1}次评论')
+    print(f'\n{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}|第{i + 1}次评论')
     try:
         pool.map(comment, mid_lists)
     except:
         is_frequent = True
+    print('当前时间：' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
     print('评论成功数：' + str(com_suc_num))
     print('总评论数：' + str(get_mid_num()))
     writable = True
@@ -1370,8 +1374,8 @@ if __name__ == '__main__':
         '别带链接': random_comment
     }
 
-    # 带上链接
-    random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
+    # # 带上链接
+    # random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
     # 默认评论内容
     default_content = random_comment
 
@@ -1396,7 +1400,6 @@ if __name__ == '__main__':
             print('https://m.weibo.cn/detail/' + my_mid)
     else:
         zero_handle(True)
-
     t_loop_get_mid = Thread(target=loop_get_mid, args=(cid,))
     t_loop_get_mid.setDaemon(True)
     t_loop_get_mid.start()
