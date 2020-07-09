@@ -778,9 +778,11 @@ def wait_zero():
     while True:
         t = get_time_after_zero()
         if t == 0:
-            w_gen.send({'距离零点': None})
+            with lock:
+                w_gen.send({'距离零点': None})
             break
-        w_gen.send({'距离零点': f'{86400 - t}s'})
+        with lock:
+            w_gen.send({'距离零点': f'{86400 - t}s'})
         time.sleep(0.1)
 
 
