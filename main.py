@@ -556,7 +556,7 @@ def write_gen():
             l[list(d)[0]] = d[list(d)[0]]
             s = '\r' + ','.join([str(i) + ':' + str(l[i]) for i in l if l[i] != None])
             if writable:
-                sys.stdout.write(s)
+                sys.stdout.write(s + ' ' * 32)
                 sys.stdout.flush()
 
 
@@ -655,7 +655,7 @@ def loop_get_mid(cid):
     while True:
         with lock:
             w_gen.send({'等待评论数': len(get_mid_list())})
-        t = gen.send(get_weibo_time)
+            t = gen.send(get_weibo_time)
         wait_time(t, '获取微博等待时间')
         get_mid(cid)
 
@@ -817,6 +817,7 @@ def get_uid(gsid):
     except:
         if not r.json()['data']['login']:
             print('请重新登录')
+            push_wechat('weibo_comments', '请重新登录')
             cf.Del('配置', 'gsid')
             exit()
         elif r.json()['ok'] == 0:
@@ -1144,9 +1145,9 @@ def zero_handle(run=False):
         writable = False
         if not run:
             print()
-        print()
         print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|正在创建微博')
-        mid = create_weibo(gen.send(weibo_title), cid)
+        with lock:
+            mid = create_weibo(gen.send(weibo_title), cid)
         if mid == False:
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建失败')
             is_too_many_weibo = True
@@ -1190,7 +1191,8 @@ def start_comments(i):
     global com_suc_num
     global is_frequent
     global writable
-    get_mid_max_r = gen.send(get_mid_max)
+    with lock:
+        get_mid_max_r = gen.send(get_mid_max)
     n = 0
     while True:
         mid_list = get_mid_list()
@@ -1203,18 +1205,20 @@ def start_comments(i):
                 w_gen.send({'没有新微博': None})
             if (86400 - last_comment_for_zero_time) < get_time_after_zero():
                 break
-            if len(mid_list) >= gen.send(start_comment_num):
-                break
+            with lock:
+                if len(mid_list) >= gen.send(start_comment_num):
+                    break
         time.sleep(1)
     mid_lists = []
     for mid, user_id, text, name in mid_list[:get_mid_max_r]:
         while True:
-            content = gen.send(default_content)
-            for key in keywords_comment.keys():
-                if key in text:
-                    content = gen.send(keywords_comment[key])
-            if user_id in user_comments.keys():
-                content = gen.send(user_comments[user_id])
+            with lock:
+                content = gen.send(default_content)
+                for key in keywords_comment.keys():
+                    if key in text:
+                        content = gen.send(keywords_comment[key])
+                if user_id in user_comments.keys():
+                    content = gen.send(user_comments[user_id])
             if len(content) <= 140:
                 break
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
