@@ -81,6 +81,7 @@ def comment(args):
     :return:
     """
     global com_suc_num
+    global com_err_num
     global is_frequent
     global is_too_many_weibo
     mid, content = args
@@ -138,6 +139,7 @@ def comment(args):
         else:
             with lock:
                 print('评论失败：' + detail_url)
+                com_err_num += 1
                 if r.json()['ok'] == 0:
                     print(r.json()['msg'])
                     errno = r.json()['errno']
@@ -147,15 +149,12 @@ def comment(args):
                     # 已经评论
                     elif errno == '20019':
                         mid_write_file(mid)
-                        com_suc_num += 1
                     # 只允许粉丝评论
                     elif errno == '20210':
-                        mid_write_file(mid)
-                        com_suc_num += 1
+                        mid_error_write_file(mid)
                     # 只允许关注用户评论
                     elif errno == '20206':
-                        mid_write_file(mid)
-                        com_suc_num += 1
+                        mid_error_write_file(mid)
                     # 发微博太多
                     elif errno == '20016':
                         is_too_many_weibo = True
@@ -164,20 +163,16 @@ def comment(args):
                         exit()
                     # 服务器走丢了
                     elif errno == '100001':
-                        pass
+                        mid_error_write_file(mid)
                     # 在黑名单中，无法进行评论
                     elif errno == '20205':
-                        mid_write_file(mid)
-                        com_suc_num += 1
+                        mid_error_write_file(mid)
                     # 微博不存在或暂无查看权限
                     elif errno == '20101':
-                        mid_write_file(mid)
-                        com_suc_num += 1
+                        mid_error_write_file(mid)
                     # 由于作者隐私设置，你没有权限评论此微博
                     elif errno == '20130':
-                        mid_write_file(mid)
-                        com_suc_num += 1
-
+                        mid_error_write_file(mid)
             return False
     except SystemExit:
         # 退出进程
@@ -264,6 +259,15 @@ def mid_write_file(mid):
     write_file('mid.txt', mid)
 
 
+def mid_error_write_file(mid):
+    """
+    记录评论失败的mid
+    :param mid:
+    :return:
+    """
+    write_file('mid_error.txt', mid)
+
+
 def at_write_file(name):
     """
     记录已经at的name
@@ -292,6 +296,15 @@ def mid_in_file(mid):
     :return:
     """
     return in_file('mid.txt', mid)
+
+
+def mid_error_in_file(mid):
+    """
+    是否是评论失败的mid
+    :param mid:
+    :return:
+    """
+    return in_file('mid_error.txt', mid)
 
 
 def following_in_file(uid):
@@ -327,6 +340,14 @@ def clear_mid_file():
     :return:
     """
     open('mid.txt', 'w').close()
+
+
+def clear_mid_error_file():
+    """
+    清除mid_error文件
+    :return:
+    """
+    open('mid_error.txt', 'w').close()
 
 
 def clear_at_file():
@@ -713,7 +734,7 @@ def get_mid_list():
                 comments = False
             if comment_follow_me and not fans_in_file(user_id):
                 comments = False
-        if comments and mid != my_mid and not mid_in_file(mid) and user_id != uid:
+        if comments and mid != my_mid and not mid_in_file(mid) and not mid_error_in_file(mid) and user_id != uid:
             mid_list.append((mid, user_id, text, screen_name))
     return mid_list
 
@@ -1189,21 +1210,21 @@ def start_comments(i):
     :return:
     """
     global com_suc_num
+    global com_err_num
     global is_frequent
     global writable
+    global commentable
     with lock:
         get_mid_max_r = gen.send(get_mid_max)
-    n = 0
     while True:
         mid_list = get_mid_list()
         if not mid_list:
-            with lock:
-                w_gen.send({'没有新微博': n})
-            n += 1
+            pass
         else:
-            with lock:
-                w_gen.send({'没有新微博': None})
             if (86400 - last_comment_for_zero_time) < get_time_after_zero():
+                break
+            elif commentable:
+                commentable = False
                 break
             with lock:
                 if len(mid_list) >= gen.send(start_comment_num):
@@ -1223,6 +1244,7 @@ def start_comments(i):
                 break
         mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
     com_suc_num = 0
+    com_err_num = 0
     writable = False
     print(f'\n{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}|第{i + 1}次评论')
     try:
@@ -1231,6 +1253,7 @@ def start_comments(i):
         is_frequent = True
     print('当前时间：' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
     print('评论成功数：' + str(com_suc_num))
+    print('评论失败数：' + str(com_err_num))
     print('总评论数：' + str(get_mid_num()))
     writable = True
     wait_comment_num = len(get_mid_list())
@@ -1245,6 +1268,7 @@ def start_comments(i):
 ************************
 第{i + 1}次评论  
 评论成功数：{com_suc_num}  
+评论失败数：{com_err_num}  
 总评论数：{get_mid_num()}  
 待评论数：{wait_comment_num}''')
     if (86400 - last_comment_for_zero_time) < get_time_after_zero():
@@ -1379,7 +1403,7 @@ if __name__ == '__main__':
     }
 
     # # 带上链接
-    # random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
+    random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
     # 默认评论内容
     default_content = random_comment
 
@@ -1412,3 +1436,12 @@ if __name__ == '__main__':
     t_loop_zero_handle.start()
     t_loop_comments = Thread(target=loop_comments, args=(loop_comments_num,))
     t_loop_comments.start()
+    commentable = False
+    while True:
+        command = input()
+        if command == '':
+            commentable = True
+        elif command == ' ':
+            is_finish = True
+        elif command == 'exit':
+            os._exit(0)
