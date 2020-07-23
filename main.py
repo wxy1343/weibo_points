@@ -1172,6 +1172,11 @@ def zero_handle(run=False):
             mid = create_weibo(gen.send(weibo_title), cid)
         if mid == False:
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建失败')
+            push_wechat('weibo_comments', f'''  
+            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+            ************************
+            创建微博失败
+            ************************''')
             is_too_many_weibo = True
             if 'my_mid' not in dir():
                 my_mid = get_my_mid()
@@ -1180,6 +1185,12 @@ def zero_handle(run=False):
         else:
             my_mid = mid
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建成功')
+            push_wechat('weibo_comments', f'''  
+            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+            ************************
+            创建微博成功  
+            微博：https://m.weibo.cn/{uid}/{my_mid}  
+            ************************''')
             print('https://m.weibo.cn/detail/' + my_mid)
             # 发送微博到群组
             for gid in gid_list:
