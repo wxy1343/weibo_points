@@ -1162,6 +1162,7 @@ def zero_handle(run=False):
         if at_file:
             clear_at_file()
         clear_mid_file()
+        clear_mid_error_file()
         clear_mid_json()
         writable = False
         if not run:
@@ -1402,7 +1403,7 @@ if __name__ == '__main__':
         '别带链接': random_comment
     }
 
-    # # 带上链接
+    # 带上链接
     random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
     # 默认评论内容
     default_content = random_comment
