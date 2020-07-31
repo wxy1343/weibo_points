@@ -36,14 +36,15 @@ def create_weibo(text, cid):
 
     def retry():
         for info in get_weibo_info(gsid):
+            t = info['t']
             mid = info['mid']
             title = info['title']
-            if title == weibo_title:
+            if title == weibo_title and time.time() - t > 600:
                 add_config(mid)
                 return mid
         else:
             print('创建微博失败,正在重试')
-            time.sleep(0.1)
+            time.sleep(1)
             mid = create_weibo(text, cid)
             return mid
 
@@ -807,13 +808,17 @@ def wait_zero():
         time.sleep(0.1)
 
 
-def get_uid(gsid):
+def get_uid(gsid, config=False):
     """
     获取用户的id
     :param gsid:
     :return:
     """
     global is_frequent
+    if config:
+        uid = cf.GetStr('配置', 'uid')
+        if uid != '':
+            return uid
     req = requests.Session()
     cookies = {'SUB': gsid}
     url = 'https://m.weibo.cn/api/config'
@@ -834,7 +839,10 @@ def get_uid(gsid):
             is_frequent = True
             return
     try:
-        return r.json()['data']['uid']
+        uid = r.json()['data']['uid']
+        if not cf.GetStr('配置', uid):
+            cf.Add('配置', 'uid', uid)
+        return uid
     except:
         if not r.json()['data']['login']:
             print('请重新登录')
@@ -1173,10 +1181,10 @@ def zero_handle(run=False):
         if mid == False:
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建失败')
             push_wechat('weibo_comments', f'''  
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-            ************************
-            创建微博失败
-            ************************''')
+            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}   
+************************  
+创建微博失败  
+************************''')
             is_too_many_weibo = True
             if 'my_mid' not in dir():
                 my_mid = get_my_mid()
@@ -1186,11 +1194,11 @@ def zero_handle(run=False):
             my_mid = mid
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建成功')
             push_wechat('weibo_comments', f'''  
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-            ************************
-            创建微博成功  
-            微博：https://m.weibo.cn/{uid}/{my_mid}  
-            ************************''')
+            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
+************************  
+创建微博成功  
+微博：https://m.weibo.cn/{uid}/{my_mid}  
+************************''')
             print('https://m.weibo.cn/detail/' + my_mid)
             # 发送微博到群组
             for gid in gid_list:
@@ -1421,7 +1429,7 @@ if __name__ == '__main__':
 
     init_log(logging.INFO)
     gsid = get_gsid()
-    uid = get_uid(gsid)
+    uid = get_uid(gsid, True)
     while uid is None:
         wait_time(600)
         uid = get_uid(gsid)
