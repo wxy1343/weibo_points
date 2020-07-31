@@ -397,6 +397,14 @@ def get_mid_num():
     return get_file_num('mid.txt')
 
 
+def get_mid_error_num():
+    """
+    获取评论失败的mid的数量
+    :return:
+    """
+    return get_file_num('mid_error.txt')
+
+
 def get_at_list():
     """
     获取at列表
@@ -1275,6 +1283,7 @@ def start_comments(i):
     print('评论成功数：' + str(com_suc_num))
     print('评论失败数：' + str(com_err_num))
     print('总评论数：' + str(get_mid_num()))
+    print('总评论失败数：' + str(get_mid_error_num()))
     writable = True
     wait_comment_num = len(get_mid_list())
     with lock:
@@ -1290,6 +1299,7 @@ def start_comments(i):
 评论成功数：{com_suc_num}  
 评论失败数：{com_err_num}  
 总评论数：{get_mid_num()}  
+总评论失败数：{get_mid_error_num()}  
 待评论数：{wait_comment_num}''')
     if (86400 - last_comment_for_zero_time) < get_time_after_zero():
         wait_zero()
