@@ -36,14 +36,15 @@ def create_weibo(text, cid):
 
     def retry():
         for info in get_weibo_info(gsid):
+            t = info['t']
             mid = info['mid']
             title = info['title']
-            if title == weibo_title:
+            if title == weibo_title and time.time() - t > 600:
                 add_config(mid)
                 return mid
         else:
             print('创建微博失败,正在重试')
-            time.sleep(0.1)
+            time.sleep(1)
             mid = create_weibo(text, cid)
             return mid
 
@@ -100,6 +101,7 @@ def comment(args):
         try:
             if wait_time >= 8:
                 is_frequent = True
+                com_err_num += 1
                 return False
             r = requests.get(detail_url, cookies=cookies)
             logging.info(str(r.status_code))
@@ -184,6 +186,7 @@ def comment(args):
             print('评论失败：' + detail_url)
         if r.json()['errno'] == '100005':
             is_frequent = True
+        com_err_num += 1
         return False
 
 
@@ -396,6 +399,14 @@ def get_mid_num():
     return get_file_num('mid.txt')
 
 
+def get_mid_error_num():
+    """
+    获取无法评论数的mid的数量
+    :return:
+    """
+    return get_file_num('mid_error.txt')
+
+
 def get_at_list():
     """
     获取at列表
@@ -437,13 +448,18 @@ def get_my_name():
     获取自己的名字
     :return:
     """
+    name = cf.GetStr('配置', 'name')
+    if name != '':
+        return name
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
     r = requests.get(url)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
         logging.warning(str(r.status_code))
-    return r.json()['data']['user']['screen_name']
+    name = r.json()['data']['user']['screen_name']
+    cf.Add('配置', 'name', name)
+    return name
 
 
 def wait_time(n, text='等待时间'):
@@ -807,13 +823,17 @@ def wait_zero():
         time.sleep(0.1)
 
 
-def get_uid(gsid):
+def get_uid(gsid, config=False):
     """
     获取用户的id
     :param gsid:
     :return:
     """
     global is_frequent
+    if config:
+        uid = cf.GetStr('配置', 'uid')
+        if uid != '':
+            return uid
     req = requests.Session()
     cookies = {'SUB': gsid}
     url = 'https://m.weibo.cn/api/config'
@@ -834,7 +854,10 @@ def get_uid(gsid):
             is_frequent = True
             return
     try:
-        return r.json()['data']['uid']
+        uid = r.json()['data']['uid']
+        if not cf.GetStr('配置', uid):
+            cf.Add('配置', 'uid', uid)
+        return uid
     except:
         if not r.json()['data']['login']:
             print('请重新登录')
@@ -1093,17 +1116,22 @@ def login_integral(gsid):
     :param gsid:
     :return:
     """
-    parmas = {'from': '21A3095010', 'ti': str(int(time.time() * 1000))}
-    st = get_st(parmas, gsid)
-    headers = {'gsid': gsid, 'st': st}
-    r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=headers)
-    try:
-        logging.info(str(r.status_code) + ':' + str(r.json()))
-    except:
-        logging.warning(str(r.status_code))
-    if r.json()['code'] == 100000:
-        return True
-    return False
+    n = 0
+    while True:
+        parmas = {'from': '21A3095010', 'ti': str(int(time.time() * 1000))}
+        st = get_st(parmas, gsid)
+        headers = {'gsid': gsid, 'st': st}
+        r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=headers)
+        try:
+            logging.info(str(r.status_code) + ':' + str(r.json()))
+        except:
+            logging.warning(str(r.status_code))
+        if r.json()['code'] == 100000:
+            return True
+        if n > 3:
+            return False
+        n += 1
+        time.sleep(0.5)
 
 
 def init_log(level):
@@ -1173,10 +1201,10 @@ def zero_handle(run=False):
         if mid == False:
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建失败')
             push_wechat('weibo_comments', f'''  
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-            ************************
-            创建微博失败
-            ************************''')
+            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}   
+************************  
+创建微博失败  
+************************''')
             is_too_many_weibo = True
             if 'my_mid' not in dir():
                 my_mid = get_my_mid()
@@ -1186,11 +1214,11 @@ def zero_handle(run=False):
             my_mid = mid
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建成功')
             push_wechat('weibo_comments', f'''  
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
-            ************************
-            创建微博成功  
-            微博：https://m.weibo.cn/{uid}/{my_mid}  
-            ************************''')
+            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
+************************  
+创建微博成功  
+微博：https://m.weibo.cn/{uid}/{my_mid}  
+************************''')
             print('https://m.weibo.cn/detail/' + my_mid)
             # 发送微博到群组
             for gid in gid_list:
@@ -1203,7 +1231,7 @@ def zero_handle(run=False):
         vip_pk(gsid)
         print('*' * 100)
         print('获取超话登录积分')
-        login_integral(gsid)
+        print(login_integral(gsid))
         print('*' * 100)
         print('获取每日签到积分')
         sign_integral(gsid)
@@ -1267,6 +1295,7 @@ def start_comments(i):
     print('评论成功数：' + str(com_suc_num))
     print('评论失败数：' + str(com_err_num))
     print('总评论数：' + str(get_mid_num()))
+    print('无法评论数：' + str(get_mid_error_num()))
     writable = True
     wait_comment_num = len(get_mid_list())
     with lock:
@@ -1282,6 +1311,7 @@ def start_comments(i):
 评论成功数：{com_suc_num}  
 评论失败数：{com_err_num}  
 总评论数：{get_mid_num()}  
+无法评论数：{get_mid_error_num()}  
 待评论数：{wait_comment_num}''')
     if (86400 - last_comment_for_zero_time) < get_time_after_zero():
         wait_zero()
@@ -1390,7 +1420,7 @@ if __name__ == '__main__':
 
     init_log(logging.INFO)
     gsid = get_gsid()
-    uid = get_uid(gsid)
+    uid = get_uid(gsid, True)
     while uid is None:
         wait_time(600)
         uid = get_uid(gsid)
