@@ -1089,6 +1089,31 @@ def push_wechat(text, desp):
         return False
 
 
+def retry(n, t):
+    """
+    重试装饰器
+    :param n: 重试次数
+    :param t: 重试时间
+    :return:
+    """
+
+    def wrapper(f):
+        def wrapped(*args, **kwargs):
+            for i in range(n):
+                try:
+                    r = f(*args, **kwargs)
+                except:
+                    r = False
+                if r:
+                    return True
+                else:
+                    time.sleep(t)
+
+        return wrapped
+
+    return wrapper
+
+
 def get_st(parmas, gsid):
     """
     微博超话客户端的参数加密验证
@@ -1110,28 +1135,24 @@ def get_st(parmas, gsid):
     return st
 
 
+@retry(3, 0.5)
 def login_integral(gsid):
     """
     超话登录积分 +10
     :param gsid:
     :return:
     """
-    n = 0
-    while True:
-        parmas = {'from': '21A3095010', 'ti': str(int(time.time() * 1000))}
-        st = get_st(parmas, gsid)
-        headers = {'gsid': gsid, 'st': st}
-        r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=headers)
-        try:
-            logging.info(str(r.status_code) + ':' + str(r.json()))
-        except:
-            logging.warning(str(r.status_code))
-        if r.json()['code'] == 100000:
-            return True
-        if n > 3:
-            return False
-        n += 1
-        time.sleep(0.5)
+    parmas = {'from': '21A3095010', 'ti': str(int(time.time() * 1000))}
+    st = get_st(parmas, gsid)
+    headers = {'gsid': gsid, 'st': st}
+    r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=headers)
+    try:
+        logging.info(str(r.status_code) + ':' + str(r.json()))
+    except:
+        logging.warning(str(r.status_code))
+    if r.json()['code'] == 100000 and not r.json()['toast']:
+        return True
+    return False
 
 
 def init_log(level):
