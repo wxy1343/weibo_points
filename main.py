@@ -603,10 +603,10 @@ next(w_gen)
 
 def get_mid(cid):
     """
-    获取帖子
+    获取微博
     :param cid: 超话id
     :param page: 页数
-    :return: 帖子列表
+    :return: 微博列表
     """
     global is_frequent
 
@@ -757,7 +757,7 @@ def get_mid_list():
 
 def get_my_mid():
     """
-    获取配置中自己的帖子
+    获取配置中自己的微博
     :return:
     """
     mid = cf.GetStr('配置', 'mid')
@@ -885,9 +885,9 @@ def find_super_topic(name):
 
 def get_bid(mid):
     """
-    获取帖子的bid
+    获取微博的bid
     bid链接群聊不会被转换成短链
-    :param mid: 帖子id
+    :param mid: 微博id
     :return:
     """
     url = 'https://m.weibo.cn/detail/' + mid
@@ -1098,16 +1098,19 @@ def retry(n, t):
     """
 
     def wrapper(f):
-        def wrapped(*args, **kwargs):
+        def retry_thread(f, *args, **kwargs):
             for i in range(n):
                 try:
                     r = f(*args, **kwargs)
                 except:
                     r = False
                 if r:
-                    return True
+                    break
                 else:
                     time.sleep(t)
+
+        def wrapped(*args, **kwargs):
+            Thread(target=lambda: retry_thread(f, *args, **kwargs)).start()
 
         return wrapped
 
@@ -1135,7 +1138,7 @@ def get_st(parmas, gsid):
     return st
 
 
-@retry(3, 0.5)
+@retry(100, 10)
 def login_integral(gsid):
     """
     超话登录积分 +10
@@ -1252,7 +1255,7 @@ def zero_handle(run=False):
         vip_pk(gsid)
         print('*' * 100)
         print('获取超话登录积分')
-        print(login_integral(gsid))
+        login_integral(gsid)
         print('*' * 100)
         print('获取每日签到积分')
         sign_integral(gsid)
