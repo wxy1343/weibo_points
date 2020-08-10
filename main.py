@@ -1296,6 +1296,7 @@ def start_comments(i):
         time.sleep(1)
     mid_lists = []
     for mid, user_id, text, name in mid_list[:get_mid_max_r]:
+        n = 0
         while True:
             with lock:
                 content = gen.send(default_content)
@@ -1304,9 +1305,14 @@ def start_comments(i):
                         content = gen.send(keywords_comment[key])
                 if user_id in user_comments.keys():
                     content = gen.send(user_comments[user_id])
+            content = content.format(mymid=my_mid, myuid=uid, name=name, mid=mid, uid=user_id)
             if len(content) <= 140:
                 break
-        mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
+            else:
+                if n > 3:
+                    break
+                n += 1
+        mid_lists.append((mid, content))
     com_suc_num = 0
     com_err_num = 0
     writable = False
@@ -1355,14 +1361,15 @@ def loop_comments(num):
         get_uid(gsid)
         with lock:
             w_gen.send({'等待评论数': len(get_mid_list())})
-        if get_mid_num() >= comment_max:
-            print(f'你已经评论{comment_max}条了')
         while is_too_many_weibo:
             wait_time(too_many_weibo_wait_time, '发微博太多等待时间')
             is_too_many_weibo = False
             if not is_today():
                 zero_handle(True)
         else:
+            if get_mid_num() >= comment_max:
+                print(f'你今天已经评论{comment_max}条了')
+                wait_zero()
             while True:
                 if is_frequent:
                     push_wechat('weibo_comments', f'''{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
@@ -1383,16 +1390,16 @@ if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
-    at_file = False  # @超话里的用户保存到文件
-    at_edit_weibo = False  # 自动修改微博文案@超话里的用户，要先开at_file
-    at_comment = False  # 是否评论@自己的
+    at_comment = False  # 是否评论@自己的，检测微博标题是否@自己，只适用于上面两条过滤条件后生效
+    at_file = False  # 爬取超话里的用户名保存到文件
+    at_edit_weibo = False  # 自动在微博标题上at超话里的用户，要先开at_file
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(10, 20))  # 获取微博等待时间
     start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
-    last_comment_for_zero_time = 600  # 距离0点前开始今天最后一次评论的时间
-    comment_max = 2000  # 最多评论次数
-    loop_comments_num = 99999  # 循环评论次数
-    loop_comments_time = 10  # 每次循环评论等待时间
+    last_comment_for_zero_time = 600  # 距离0点前开始今天最后一次评论的时间，23:50分最后一次评论
+    comment_max = 2000  # 一天最多评论次数，超过后等待零点继续
+    loop_comments_num = 99999  # 循环运行次数
+    loop_comments_time = 10  # 每次循环等待时间
     frequent_wait_time = 600  # 频繁等待时间
     too_many_weibo_wait_time = 3600 * 6  # 发微博太多等待时间
 
@@ -1414,7 +1421,7 @@ if __name__ == '__main__':
 
     # 微博链接
     # {uid}和{mid}会自动替换
-    mid_link = 'https://m.weibo.cn/{uid}/{mid}'
+    mid_link = 'https://m.weibo.cn/{myuid}/{mymid}'
 
     # 随机评论列表
     random_list = [
@@ -1441,7 +1448,9 @@ if __name__ == '__main__':
         '@{name} 如意芳霏如你，韶华荏苒如你，渐行渐远渐无书，流年似水似柔情，缘世今生都有你，梦里梦外都是你 。@鞠婧祎',
         '@{name} 期待@鞠婧祎 饰演的傅容妹妹[给你小心心]她不仅是高高在上的肃王妃，也是掌管如意楼的女掌柜，国家暗卫在手[并不简单]爱情事业双丰收，江湖朝堂都有她的传说～甜爽再度升级，双重预知的新颖设定，我i了[羞嗒嗒]',
         '@{name} 前世她身为长安府尹之女，却下场凄凉；重生的她大彻大悟，女性意识觉醒，霸气十足。且看真诚坦率的傅容@鞠婧祎 如何凭借“预祝梦”的金手指，自立自强，走向人生巅峰。和傅容开启一段翻涌朝权的甜爽之恋吧！ http://t.cn/A6LiHtA4',
-        '@{name} 舞台影视双栖全能偶像鞠婧祎，一番女主剧《芸汐传》爱奇艺播放量破45亿拿下2018年度网剧年亚2020年上星湖南卫视创近三年以来五大卫视白天剧单集最高收视率，主演《新白娘子传奇》31次登顶V榜演员榜日榜🏆荣获2019年年度戏剧潜力艺人，期待待播剧《云上恋歌》《如意芳霏》不畏前路艰险，与尔炽烈同行'
+        '@{name} 舞台影视双栖全能偶像鞠婧祎，一番女主剧《芸汐传》爱奇艺播放量破45亿拿下2018年度网剧年亚2020年上星湖南卫视创近三年以来五大卫视白天剧单集最高收视率，主演《新白娘子传奇》31次登顶V榜演员榜日榜🏆荣获2019年年度戏剧潜力艺人，期待待播剧《云上恋歌》《如意芳霏》不畏前路艰险，与尔炽烈同行',
+        '@{name} 女扮男装，书墨飘香。古曾有“女子无才便是德”的说法，而家境贫寒的她不愿放弃对知识的渴望。聪明伶俐，美丽善良，楚楚动人，她就是雪文曦。一起来看看《漂亮书生》雪文曦@鞠婧祎 求学的故事吧！',
+        '@{name} 人间仙子雪文曦🌟勤劳养家雪文曦🌟抄书小天使雪文曦🌟古代打印机雪文曦🌟云上幺弟雪文曦🌟人间奶瓜雪文曦🌟绝世可爱雪文曦🌟'
     ]
 
     # 随机评论
