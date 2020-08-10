@@ -1296,6 +1296,7 @@ def start_comments(i):
         time.sleep(1)
     mid_lists = []
     for mid, user_id, text, name in mid_list[:get_mid_max_r]:
+        n = 0
         while True:
             with lock:
                 content = gen.send(default_content)
@@ -1304,9 +1305,14 @@ def start_comments(i):
                         content = gen.send(keywords_comment[key])
                 if user_id in user_comments.keys():
                     content = gen.send(user_comments[user_id])
+            content = content.format(mymid=my_mid, myuid=uid, name=name, mid=mid, uid=user_id)
             if len(content) <= 140:
                 break
-        mid_lists.append((mid, content.format(mid=my_mid, uid=uid, name=name)))
+            else:
+                if n > 3:
+                    break
+                n += 1
+        mid_lists.append((mid, content))
     com_suc_num = 0
     com_err_num = 0
     writable = False
@@ -1355,14 +1361,15 @@ def loop_comments(num):
         get_uid(gsid)
         with lock:
             w_gen.send({'等待评论数': len(get_mid_list())})
-        if get_mid_num() >= comment_max:
-            print(f'你已经评论{comment_max}条了')
         while is_too_many_weibo:
             wait_time(too_many_weibo_wait_time, '发微博太多等待时间')
             is_too_many_weibo = False
             if not is_today():
                 zero_handle(True)
         else:
+            if get_mid_num() >= comment_max:
+                print(f'你今天已经评论{comment_max}条了')
+                wait_zero()
             while True:
                 if is_frequent:
                     push_wechat('weibo_comments', f'''{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
@@ -1383,16 +1390,16 @@ if __name__ == '__main__':
     # wait_zero()  # 等待零点执行
     comment_following = False  # 是否只评论已关注的
     comment_follow_me = False  # 是否只评论关注自己的
-    at_file = False  # @超话里的用户保存到文件
-    at_edit_weibo = False  # 自动修改微博文案@超话里的用户，要先开at_file
-    at_comment = False  # 是否评论@自己的
+    at_comment = False  # 是否评论@自己的，检测微博标题是否@自己，只适用于上面两条过滤条件后生效
+    at_file = False  # 爬取超话里的用户名保存到文件
+    at_edit_weibo = False  # 自动在微博标题上at超话里的用户，要先开at_file
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(10, 20))  # 获取微博等待时间
     start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
-    last_comment_for_zero_time = 600  # 距离0点前开始今天最后一次评论的时间
-    comment_max = 2000  # 最多评论次数
-    loop_comments_num = 99999  # 循环评论次数
-    loop_comments_time = 10  # 每次循环评论等待时间
+    last_comment_for_zero_time = 600  # 距离0点前开始今天最后一次评论的时间，23:50分最后一次评论
+    comment_max = 2000  # 一天最多评论次数，超过后等待零点继续
+    loop_comments_num = 99999  # 循环运行次数
+    loop_comments_time = 10  # 每次循环等待时间
     frequent_wait_time = 600  # 频繁等待时间
     too_many_weibo_wait_time = 3600 * 6  # 发微博太多等待时间
 
@@ -1412,7 +1419,7 @@ if __name__ == '__main__':
 
     # 微博链接
     # {uid}和{mid}会自动替换
-    mid_link = 'https://m.weibo.cn/{uid}/{mid}'
+    mid_link = 'https://m.weibo.cn/{myuid}/{mymid}'
 
     # 随机评论列表
     random_list = [
@@ -1439,6 +1446,8 @@ if __name__ == '__main__':
         '别带链接': random_comment
     }
 
+    # 带上链接
+    random_comment = random_gen(list(map(lambda i: i + ' ' + mid_link, random_list)))
     # 默认评论内容
     default_content = random_comment
 
