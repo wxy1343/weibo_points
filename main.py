@@ -124,9 +124,9 @@ def comment(args):
         try:
             r = requests.post(url, data=data, cookies=cookies, timeout=1)
             try:
-                logging.info(str(r.status_code) + ':' + str(r.json()))
+                logging.info(str(r.status_code) + ':' + mid + ':' + str(r.json()))
             except:
-                logging.warning(str(r.status_code))
+                logging.warning(str(r.status_code) + ':' + mid)
             break
         except:
             pass
@@ -1246,7 +1246,10 @@ def zero_handle(run=False):
             print('https://m.weibo.cn/detail/' + my_mid)
             # 发送微博到群组
             for gid in gid_list:
-                group_chat_comments(gid)
+                try:
+                    group_chat_comments(gid)
+                except:
+                    logging.error(str(sys.exc_info()))
         print('*' * 100)
         print('获取每日vip签到成长值')
         vip_sign(gsid)
