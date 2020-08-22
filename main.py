@@ -30,16 +30,13 @@ def create_weibo(text, cid):
     :return:
     """
 
-    def add_config(mid):
-        cf.Add('配置', 'mid', mid)
-        cf.Add('配置', 'time', str(time.time()))
-
     def retry():
         for info in get_weibo_info(gsid):
             t = info['t']
             mid = info['mid']
             title = info['title']
-            if title == weibo_title and time.time() - t > 600:
+            if title == weibo_title and t > time.time() - get_time_after_zero() or abs(
+                    t - get_close_zero_time()) < 600:
                 add_config(mid)
                 return mid
         else:
@@ -62,17 +59,25 @@ def create_weibo(text, cid):
         logging.warning(str(r.status_code) + ':' + r.text)
         return retry()
     code = r.json()['code']
-    if code == '100000':
+    if code == 100000:
         mid = r.json()['data']['mid']
         add_config(mid)
         return mid
-    elif code == '100001':
+    elif code == 100001:
         return False
-    elif code == '20019':
+    elif code == 20019:
+        return retry()
+    # Redis连接异常
+    elif code == 200124:
         return retry()
     else:
         print(r.json()['msg'])
-        return False
+        return retry()
+
+
+def add_config(mid):
+    cf.Add('配置', 'mid', mid)
+    cf.Add('配置', 'time', str(time.time()))
 
 
 def comment(args):
@@ -940,6 +945,34 @@ def group_chat_comments(gid):
         print('发送失败：' + title)
 
 
+def retry(n, t):
+    """
+    重试装饰器
+    :param n: 重试次数
+    :param t: 重试时间
+    :return:
+    """
+
+    def wrapper(f):
+        def retry_thread(f, *args, **kwargs):
+            for i in range(n):
+                try:
+                    r = f(*args, **kwargs)
+                except:
+                    r = False
+                if not r:
+                    time.sleep(t)
+                else:
+                    break
+
+        def wrapped(*args, **kwargs):
+            Thread(target=lambda: retry_thread(f, *args, **kwargs)).start()
+
+        return wrapped
+
+    return wrapper
+
+
 def vip_sign(gsid):
     """
     每日vip签到成长值+1
@@ -962,6 +995,7 @@ def vip_sign(gsid):
         pass
 
 
+@retry(3, 1)
 def vip_pk(gsid):
     """
     每日vip pk成长值+1
@@ -1089,34 +1123,6 @@ def push_wechat(text, desp):
         return False
 
 
-def retry(n, t):
-    """
-    重试装饰器
-    :param n: 重试次数
-    :param t: 重试时间
-    :return:
-    """
-
-    def wrapper(f):
-        def retry_thread(f, *args, **kwargs):
-            for i in range(n):
-                try:
-                    r = f(*args, **kwargs)
-                except:
-                    r = False
-                if r:
-                    break
-                else:
-                    time.sleep(t)
-
-        def wrapped(*args, **kwargs):
-            Thread(target=lambda: retry_thread(f, *args, **kwargs)).start()
-
-        return wrapped
-
-    return wrapper
-
-
 def get_st(parmas, gsid):
     """
     微博超话客户端的参数加密验证
@@ -1198,6 +1204,17 @@ gen = next_gen()
 next(gen)
 
 
+def get_close_zero_time():
+    """
+    获取最靠近的零点时间戳
+    :return:
+    """
+    if get_time_after_zero() > 86400 / 2:
+        return time.time() - get_time_after_zero() + 86400
+    else:
+        return time.time() - get_time_after_zero()
+
+
 def zero_handle(run=False):
     """
     零点执行
@@ -1210,6 +1227,16 @@ def zero_handle(run=False):
     while True:
         while not run and get_time_after_zero() != 0:
             time.sleep(0.5)
+        if run:
+            for info in get_weibo_info(gsid):
+                t = info['t']
+                mid = info['mid']
+                title = info['title']
+                if title == weibo_title and t > time.time() - get_time_after_zero() or abs(
+                        t - get_close_zero_time()) < 600:
+                    my_mid = mid
+                    add_config(my_mid)
+                    return
         clear_log()
         if at_file:
             clear_at_file()
@@ -1325,6 +1352,7 @@ def start_comments(i):
     except:
         is_frequent = True
     print('当前时间：' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+    print('已爬取微博数：' + str(len(read_mid())))
     print('评论成功数：' + str(com_suc_num))
     print('评论失败数：' + str(com_err_num))
     print('总评论数：' + str(get_mid_num()))
@@ -1503,11 +1531,10 @@ if __name__ == '__main__':
         if not my_mid:
             print('读取失败')
             exit()
-        else:
-            print('读取成功')
-            print('https://m.weibo.cn/detail/' + my_mid)
     else:
         zero_handle(True)
+    print('读取成功')
+    print('https://m.weibo.cn/detail/' + my_mid)
     t_loop_get_mid = Thread(target=loop_get_mid, args=(cid,))
     t_loop_get_mid.setDaemon(True)
     t_loop_get_mid.start()
@@ -1518,7 +1545,10 @@ if __name__ == '__main__':
     t_loop_comments.start()
     commentable = False
     while True:
-        command = input()
+        try:
+            command = input()
+        except KeyboardInterrupt:
+            os._exit(0)
         if command == '':
             commentable = True
         elif command == ' ':
