@@ -439,10 +439,16 @@ def get_weibo_info(gsid):
         logging.warning(str(r.status_code) + ':' + r.text)
     info = []
     for i, j in enumerate(r.json()['data']['statuses']):
-        t = j['created_at']
-        t = time.mktime(time.strptime(' '.join(t.split()[:4] + t.split()[-1:]), '%c'))
-        mid = r.json()['data']['statuses'][i]['mid']
-        title = r.json()['data']['statuses'][i]['raw_text'][:-2]
+        try:
+            t = j['created_at']
+            t = time.mktime(time.strptime(' '.join(t.split()[:4] + t.split()[-1:]), '%c'))
+            mid = r.json()['data']['statuses'][i]['mid']
+        except:
+            continue
+        try:
+            title = r.json()['data']['statuses'][i]['raw_text'][:-2]
+        except:
+            title = r.json()['data']['statuses'][i]['text']
         info.append({'t': t, 'mid': mid, 'title': title})
     info.sort(key=lambda keys: keys['t'], reverse=True)
     return info
@@ -767,7 +773,10 @@ def get_my_mid():
     """
     mid = cf.GetStr('配置', 'mid')
     if mid == '':
-        for info in get_weibo_info(gsid):
+        info_list = get_weibo_info(gsid)
+        if not info_list:
+            return False
+        for info in info_list:
             mid = info['mid']
             title = info['title']
             if title == weibo_title:
@@ -1228,15 +1237,17 @@ def zero_handle(run=False):
         while not run and get_time_after_zero() != 0:
             time.sleep(0.5)
         if run:
-            for info in get_weibo_info(gsid):
-                t = info['t']
-                mid = info['mid']
-                title = info['title']
-                if title == weibo_title and t > time.time() - get_time_after_zero() or abs(
-                        t - get_close_zero_time()) < 600:
-                    my_mid = mid
-                    add_config(my_mid)
-                    return
+            info_list = get_weibo_info(gsid)
+            if info_list:
+                for info in info_list:
+                    t = info['t']
+                    mid = info['mid']
+                    title = info['title']
+                    if title == weibo_title and t > time.time() - get_time_after_zero() or abs(
+                            t - get_close_zero_time()) < 600:
+                        my_mid = mid
+                        add_config(my_mid)
+                        return
         clear_log()
         if at_file:
             clear_at_file()
@@ -1335,7 +1346,7 @@ def start_comments(i):
                         content = gen.send(keywords_comment[key])
                 if user_id in user_comments.keys():
                     content = gen.send(user_comments[user_id])
-            content = content.format(mymid=my_mid, myuid=uid, name=name, mid=mid, uid=user_id)
+            content = content.format(my_mid=my_mid, my_uid=uid, my_name=my_name, name=name, mid=mid, uid=user_id)
             if len(content) <= 140:
                 break
             else:
@@ -1451,8 +1462,10 @@ if __name__ == '__main__':
     ]
 
     # 微博链接
-    # {uid}和{mid}会自动替换
-    mid_link = 'https://m.weibo.cn/{myuid}/{mymid}'
+    # 括号里的会自动替换
+    # my_uid：自己的uid，my_mid：自己的mid，my_name：自己的名字
+    # uid：当前要评论的微博的用户的uid，mid：当前要评论的微博的mid，name：要评论的微博的用户的名字
+    mid_link = 'https://m.weibo.cn/{my_uid}/{my_mid}'
 
     # 随机评论列表
     random_list = [
@@ -1549,9 +1562,12 @@ if __name__ == '__main__':
             command = input()
         except KeyboardInterrupt:
             os._exit(0)
+        # 立即评论
         if command == '':
             commentable = True
+        # 不爬到底
         elif command == ' ':
             is_finish = True
+        # 退出
         elif command == 'exit':
             os._exit(0)
