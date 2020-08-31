@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 import logging
@@ -954,6 +955,20 @@ def group_chat_comments(gid):
         print('发送失败：' + title)
 
 
+@contextlib.contextmanager
+def unwritable():
+    """
+    控制输出的上下文管理器
+    :return:
+    """
+    global writable
+    with lock:
+        writable = False
+    yield
+    with lock:
+        writable = True
+
+
 def retry(n, t):
     """
     重试装饰器
@@ -966,10 +981,12 @@ def retry(n, t):
         def retry_thread(f, *args, **kwargs):
             for i in range(n):
                 try:
-                    r = f(*args, **kwargs)
+                    with unwritable():
+                        r = f(*args, **kwargs)
                 except:
                     r = False
-                if not r:
+                    logging.warning(str(sys.exc_info()))
+                if r == False:
                     time.sleep(t)
                 else:
                     break
@@ -1071,6 +1088,7 @@ def vip_pk(gsid):
     print(r.json()['msg'])
 
 
+@retry(3, 1)
 def vip_task_complete(gsid):
     """
     vip完成今日所有任务,成长值+2
@@ -1231,7 +1249,6 @@ def zero_handle(run=False):
     :return:
     """
     global my_mid
-    global writable
     global is_too_many_weibo
     while True:
         while not run and get_time_after_zero() != 0:
@@ -1254,59 +1271,57 @@ def zero_handle(run=False):
         clear_mid_file()
         clear_mid_error_file()
         clear_mid_json()
-        writable = False
-        if not run:
-            print()
-        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|正在创建微博')
-        with lock:
-            mid = create_weibo(gen.send(weibo_title), cid)
-        if mid == False:
-            print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建失败')
-            push_wechat('weibo_comments', f'''  
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}   
+        with unwritable():
+            if not run:
+                print()
+            print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|正在创建微博')
+            with lock:
+                mid = create_weibo(gen.send(weibo_title), cid)
+            if mid == False:
+                print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建失败')
+                push_wechat('weibo_comments', f'''  
+                {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}   
 ************************  
 创建微博失败  
 ************************''')
-            is_too_many_weibo = True
-            if 'my_mid' not in dir():
-                my_mid = get_my_mid()
-            writable = True
-            break
-        else:
-            my_mid = mid
-            print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建成功')
-            push_wechat('weibo_comments', f'''  
-            {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
+                is_too_many_weibo = True
+                if 'my_mid' not in dir():
+                    my_mid = get_my_mid()
+                break
+            else:
+                my_mid = mid
+                print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '|创建成功')
+                push_wechat('weibo_comments', f'''  
+                {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}  
 ************************  
 创建微博成功  
 微博：https://m.weibo.cn/{uid}/{my_mid}  
 ************************''')
-            print('https://m.weibo.cn/detail/' + my_mid)
-            # 发送微博到群组
-            for gid in gid_list:
-                try:
-                    group_chat_comments(gid)
-                except:
-                    logging.error(str(sys.exc_info()))
-        print('*' * 100)
-        print('获取每日vip签到成长值')
-        vip_sign(gsid)
-        print('*' * 100)
-        print('获取vip pk成长值')
-        vip_pk(gsid)
-        print('*' * 100)
-        print('获取超话登录积分')
-        login_integral(gsid)
-        print('*' * 100)
-        print('获取每日签到积分')
-        sign_integral(gsid)
-        print('*' * 100)
-        print('获取完成所有vip任务成长值')
-        vip_task_complete(gsid)
-        print('*' * 100)
-        writable = True
-        if run:
-            break
+                print('https://m.weibo.cn/detail/' + my_mid)
+                # 发送微博到群组
+                for gid in gid_list:
+                    try:
+                        group_chat_comments(gid)
+                    except:
+                        logging.error(str(sys.exc_info()))
+            print('*' * 100)
+            print('获取每日vip签到成长值')
+            vip_sign(gsid)
+            print('*' * 100)
+            print('获取vip pk成长值')
+            vip_pk(gsid)
+            print('*' * 100)
+            print('获取超话登录积分')
+            login_integral(gsid)
+            print('*' * 100)
+            print('获取每日签到积分')
+            sign_integral(gsid)
+            print('*' * 100)
+            print('获取完成所有vip任务成长值')
+            vip_task_complete(gsid)
+            print('*' * 100)
+            if run:
+                break
 
 
 def start_comments(i):
@@ -1317,7 +1332,6 @@ def start_comments(i):
     global com_suc_num
     global com_err_num
     global is_frequent
-    global writable
     global commentable
     with lock:
         get_mid_max_r = gen.send(get_mid_max)
@@ -1356,19 +1370,18 @@ def start_comments(i):
         mid_lists.append((mid, content))
     com_suc_num = 0
     com_err_num = 0
-    writable = False
-    print(f'\n{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}|第{i + 1}次评论')
-    try:
-        pool.map(comment, mid_lists)
-    except:
-        is_frequent = True
-    print('当前时间：' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
-    print('已爬取微博数：' + str(len(read_mid())))
-    print('评论成功数：' + str(com_suc_num))
-    print('评论失败数：' + str(com_err_num))
-    print('总评论数：' + str(get_mid_num()))
-    print('无法评论数：' + str(get_mid_error_num()))
-    writable = True
+    with unwritable():
+        print(f'\n{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}|第{i + 1}次评论')
+        try:
+            pool.map(comment, mid_lists)
+        except:
+            is_frequent = True
+        print('当前时间：' + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+        print('已爬取微博数：' + str(len(read_mid())))
+        print('评论成功数：' + str(com_suc_num))
+        print('评论失败数：' + str(com_err_num))
+        print('总评论数：' + str(get_mid_num()))
+        print('无法评论数：' + str(get_mid_error_num()))
     wait_comment_num = len(get_mid_list())
     with lock:
         w_gen.send({'等待评论数': wait_comment_num})
