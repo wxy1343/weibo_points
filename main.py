@@ -76,6 +76,40 @@ def create_weibo(text, cid):
         return retry()
 
 
+def retry(n, t):
+    """
+    重试装饰器
+    :param n: 重试次数
+    :param t: 重试时间
+    :return:
+    """
+
+    def wrapper(f):
+        def retry_thread(*args, **kwargs):
+            for i in range(n):
+                if run(*args, **kwargs):
+                    break
+                time.sleep(t)
+
+        def run(*args, **kwargs):
+            try:
+                with unwritable():
+                    r = f(*args, **kwargs)
+            except:
+                r = False
+                logging.warning(str(sys.exc_info()))
+            if r != False:
+                return True
+
+        def wrapped(*args, **kwargs):
+            if not run(*args, **kwargs):
+                Thread(target=lambda: retry_thread(*args, **kwargs)).start()
+
+        return wrapped
+
+    return wrapper
+
+
 def add_config(mid):
     cf.Add('配置', 'mid', mid)
     cf.Add('配置', 'time', str(time.time()))
@@ -221,6 +255,92 @@ def edit_weibo(mid, content):
     else:
         print(r.json()['msg'])
         at_file = False
+
+
+def random_repost_weibo(n=2):
+    """
+    随机转发微博
+    :param n: 转发数量
+    :return:
+    """
+    while n > 0:
+        mid_list = get_mid_list()
+        if len(mid_list) >= n:
+            for mid in random.sample(mid_list, n):
+                new_mid = repost_weibo(mid, '转发微博')
+                if not new_mid:
+                    continue
+                else:
+                    n -= 1
+                    if repost_and_del:
+                        del_weibo(new_mid)
+        time.sleep(0.5)
+
+
+@retry(3, 10)
+def repost_specified_weibo(mid):
+    """
+    转发指定微博
+    :return:
+    """
+    new_mid = repost_weibo(mid, repost_weibo_dict[mid])
+    if not new_mid:
+        return False
+    if repost_and_del:
+        del_weibo(new_mid)
+
+
+def repost_weibo(mid, content):
+    """
+    转发微博
+    :param mid:
+    :param content:
+    :return:
+    """
+    url = 'https://m.weibo.cn/compose/repost'
+    cookies = {'SUB': gsid}
+    r = requests.get(url, cookies=cookies)
+    logging.info(str(r.status_code))
+    st = r.cookies.get_dict()['XSRF-TOKEN']
+    cookies.update(r.cookies.get_dict())
+    data = {'content': content, 'mid': mid, 'st': st}
+    headers = {'Referer': 'https://m.weibo.cn'}
+    url = 'https://m.weibo.cn/api/statuses/repost'
+    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    logging.info(str(r.status_code))
+    if r.json()['ok'] == 1:
+        new_mid = r.json()['data']['mid']
+        with unwritable():
+            print(f'转发成功：https://m.weibo.cn/detail/{mid}')
+            print(f'新微博：https://m.weibo.cn/detail/{new_mid}')
+        return new_mid
+    else:
+        with unwritable():
+            print(r.json()['msg'])
+        return False
+
+
+def del_weibo(mid):
+    """
+    删除微博
+    :param mid:
+    :return:
+    """
+    url = 'https://m.weibo.cn'
+    cookies = {'SUB': gsid}
+    r = requests.get(url, cookies=cookies)
+    st = r.cookies.get_dict()['XSRF-TOKEN']
+    cookies.update(r.cookies.get_dict())
+    data = {'mid': mid, 'st': st}
+    headers = {'Referer': 'https://m.weibo.cn'}
+    url = 'https://m.weibo.cn/profile/delMyblog'
+    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    with unwritable():
+        print(r.json()['msg'])
+    if r.json()['ok'] == 1:
+        return True
+    else:
+        return False
 
 
 def after_zero(t):
@@ -590,6 +710,7 @@ def at_weibo_gen():
 
 
 at_gen = at_weibo_gen()
+
 next(at_gen)
 
 
@@ -610,6 +731,7 @@ def write_gen():
 
 
 w_gen = write_gen()
+
 next(w_gen)
 
 
@@ -969,36 +1091,6 @@ def unwritable():
         writable = True
 
 
-def retry(n, t):
-    """
-    重试装饰器
-    :param n: 重试次数
-    :param t: 重试时间
-    :return:
-    """
-
-    def wrapper(f):
-        def retry_thread(f, *args, **kwargs):
-            for i in range(n):
-                try:
-                    with unwritable():
-                        r = f(*args, **kwargs)
-                except:
-                    r = False
-                    logging.warning(str(sys.exc_info()))
-                if r == False:
-                    time.sleep(t)
-                else:
-                    break
-
-        def wrapped(*args, **kwargs):
-            Thread(target=lambda: retry_thread(f, *args, **kwargs)).start()
-
-        return wrapped
-
-    return wrapper
-
-
 def vip_sign(gsid):
     """
     每日vip签到成长值+1
@@ -1305,6 +1397,12 @@ def zero_handle(run=False):
                     except:
                         logging.error(str(sys.exc_info()))
             print('*' * 100)
+            print('开始转发微博')
+            if random_repost:
+                random_repost_weibo(random_repost_num)
+            for mid in repost_weibo_dict:
+                repost_specified_weibo(mid)
+            print('*' * 100)
             print('获取每日vip签到成长值')
             vip_sign(gsid)
             print('*' * 100)
@@ -1448,6 +1546,9 @@ if __name__ == '__main__':
     at_comment = False  # 是否评论@自己的，检测微博标题是否@自己，只适用于上面两条过滤条件后生效
     at_file = False  # 爬取超话里的用户名保存到文件
     at_edit_weibo = False  # 自动在微博标题上at超话里的用户，要先开at_file
+    random_repost = True  # 随机转发超话里的的两个微博
+    random_repost_num = 2  # 随机转发微博数量
+    repost_and_del = True  # 转发完就删除，删除后积分不会扣除
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(10, 20))  # 获取微博等待时间
     start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
@@ -1466,6 +1567,11 @@ if __name__ == '__main__':
 
     # 发送微博的标题
     weibo_title = f'#{st_name}[超话]#积分！'
+
+    # 需要转发的微博
+    repost_weibo_dict = {
+        # mid:转发内容
+    }
 
     # 需要发送的群聊的id
     gid_list = [
@@ -1492,7 +1598,7 @@ if __name__ == '__main__':
 
     # 自定义用户评论
     user_comments = {
-        # 用户id:评论内容
+
     }
 
     # 自定义关键字评论
