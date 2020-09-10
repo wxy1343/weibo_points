@@ -768,8 +768,6 @@ def get_mid(cid):
         return True
 
     since_id = ''
-    req = requests.Session()
-    req.headers = headers
     i = 1
     while True:
         with lock:
@@ -780,7 +778,7 @@ def get_mid(cid):
             try:
                 if wait_time >= 8:
                     is_frequent = True
-                r = req.get(url)
+                r = requests.get(url, headers=headers)
                 logging.info(str(r.status_code))
                 if r.status_code == 200 and r.json()['ok'] == 1:
                     break
@@ -971,11 +969,14 @@ def get_uid(gsid, config=False):
         uid = cf.GetStr('配置', 'uid')
         if uid != '':
             return uid
-    req = requests.Session()
     cookies = {'SUB': gsid}
     url = 'https://m.weibo.cn/api/config'
     while True:
-        r = req.get(url, cookies=cookies)
+        try:
+            r = requests.get(url, cookies=cookies)
+        except requests.exceptions.SSLError:
+            time.sleep(1)
+            continue
         try:
             logging.info(str(r.status_code) + ':' + str(r.json()))
         except:
@@ -1101,8 +1102,7 @@ def vip_sign(gsid):
     cookies = {'SUB': gsid}
     headers = {
         'Referer': 'https://new.vip.weibo.cn'}
-    req = requests.Session()
-    r = req.get(url, headers=headers, cookies=cookies)
+    r = requests.get(url, headers=headers, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1120,14 +1120,13 @@ def vip_pk(gsid):
     :param gsid:
     :return:
     """
-    req = requests.Session()
     url = 'https://new.vip.weibo.cn/task/pk?from_pk=1&task_id=66'
     cookies = {'SUB': gsid}
     headers = {
         'Referer': 'https://new.vip.weibo.cn'}
 
     # 获取pk对象
-    r = req.get(url, headers=headers, cookies=cookies)
+    r = requests.get(url, headers=headers, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1147,7 +1146,7 @@ def vip_pk(gsid):
 
     # 获取pk结果
     url = f'https://new.vip.weibo.cn/pk?uid={action}&task_id=66&from=from_task_pk'
-    r = req.get(url, headers=headers, cookies=cookies)
+    r = requests.get(url, headers=headers, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1176,7 +1175,7 @@ def vip_pk(gsid):
             print(j.find('header').text.strip())
     url = f'https://new.vip.weibo.cn/aj/pklog'
     data = {'duid': action, 'flag': flag, 'F': ''}
-    r = req.post(url, headers=headers, cookies=cookies, data=data)
+    r = requests.post(url, headers=headers, cookies=cookies, data=data)
     print(r.json()['msg'])
 
 
@@ -1195,7 +1194,7 @@ def vip_task_complete(gsid):
         pass
 
 
-def sign_integral(gsid):
+def sign_points(gsid):
     """
     连续访问积分
     访问1天 +3
@@ -1263,8 +1262,8 @@ def get_st(parmas, gsid):
     return st
 
 
-@retry(100, 10)
-def login_integral(gsid):
+@retry(20, 3)
+def login_points(gsid):
     """
     超话登录积分 +10
     :param gsid:
@@ -1410,10 +1409,10 @@ def zero_handle(run=False):
             vip_pk(gsid)
             print('*' * 100)
             print('获取超话登录积分')
-            login_integral(gsid)
+            login_points(gsid)
             print('*' * 100)
             print('获取每日签到积分')
-            sign_integral(gsid)
+            sign_points(gsid)
             print('*' * 100)
             print('获取完成所有vip任务成长值')
             vip_task_complete(gsid)
@@ -1641,7 +1640,8 @@ if __name__ == '__main__':
         # 关键字:评论内容
         '异常': random_comment,
         '勿带链接': random_comment,
-        '别带链接': random_comment
+        '别带链接': random_comment,
+        '勿留链接': random_comment
     }
 
     # 带上链接
