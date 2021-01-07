@@ -2,15 +2,17 @@ import contextlib
 import hashlib
 import json
 import logging
+import os
 import random
 import re
 import sys
 import time
-import os
 from multiprocessing.dummy import Pool
 from threading import Lock, Thread
+
 import requests
 from bs4 import BeautifulSoup
+
 from config import Config
 
 lock = Lock()
@@ -46,14 +48,15 @@ def create_weibo(text, cid):
             mid = create_weibo(text, cid)
             return mid
 
-    headers = {'Referer': 'https://weibo.com'}
+    h = {'Referer': 'https://weibo.com'}
+    h.update(headers)
     cookies = {'SUB': gsid}
     data = {
         'text': text, 'sync_wb': '1',
         'api': f'http://i.huati.weibo.com/pcpage/operation/publisher/sendcontent?sign=super&page_id={cid}',
         'topic_id': f'1022:{cid}'}
     url = 'https://weibo.com/p/aj/proxy?ajwvr=6'
-    r = requests.post(url, data=data, cookies=cookies, headers=headers)
+    r = requests.post(url, data=data, cookies=cookies, headers=h)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -143,7 +146,7 @@ def comment(args):
                 is_frequent = True
                 com_err_num += 1
                 return False
-            r = requests.get(detail_url, cookies=cookies)
+            r = requests.get(detail_url, cookies=cookies, headers=headers)
             logging.info(str(r.status_code))
             if r.status_code == 200:
                 break
@@ -162,7 +165,7 @@ def comment(args):
     data = {'content': content, 'mid': mid, 'st': st}
     while True:
         try:
-            r = requests.post(url, data=data, cookies=cookies, timeout=1)
+            r = requests.post(url, data=data, cookies=cookies, headers=headers, timeout=1)
             try:
                 logging.info(str(r.status_code) + ':' + mid + ':' + str(r.json()))
             except:
@@ -241,14 +244,15 @@ def edit_weibo(mid, content):
     print('正在修改微博')
     cookies = {'SUB': gsid}
     url = f'https://m.weibo.cn/detail/{mid}'
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     logging.info(str(r.status_code))
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     url = f'https://m.weibo.cn/api/statuses/update'
     data = {'content': content, 'editId': mid, 'st': st}
-    headers = {'Referer': 'https://m.weibo.cn'}
-    r = requests.post(url, data=data, cookies=cookies, headers=headers)
+    h = {'Referer': 'https://m.weibo.cn'}
+    h.update(headers)
+    r = requests.post(url, data=data, cookies=cookies, headers=h)
     logging.info(str(r.status_code))
     if r.json()['ok'] == 1:
         print('修改微博成功')
@@ -299,14 +303,15 @@ def repost_weibo(mid, content):
     """
     url = 'https://m.weibo.cn/compose/repost'
     cookies = {'SUB': gsid}
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     logging.info(str(r.status_code))
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     data = {'content': content, 'mid': mid, 'st': st}
-    headers = {'Referer': 'https://m.weibo.cn'}
+    h = {'Referer': 'https://m.weibo.cn'}
+    h.update(headers)
     url = 'https://m.weibo.cn/api/statuses/repost'
-    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    r = requests.post(url, headers=h, data=data, cookies=cookies)
     logging.info(str(r.status_code))
     if r.json()['ok'] == 1:
         new_mid = r.json()['data']['mid']
@@ -328,13 +333,14 @@ def del_weibo(mid):
     """
     url = 'https://m.weibo.cn'
     cookies = {'SUB': gsid}
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     data = {'mid': mid, 'st': st}
-    headers = {'Referer': 'https://m.weibo.cn'}
+    h = {'Referer': 'https://m.weibo.cn'}
+    h.update(headers)
     url = 'https://m.weibo.cn/profile/delMyblog'
-    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    r = requests.post(url, headers=h, data=data, cookies=cookies)
     with unwritable():
         print(r.json()['msg'])
     if r.json()['ok'] == 1:
@@ -553,7 +559,7 @@ def get_weibo_info(gsid):
     cookies = {'SUB': gsid}
     uid = get_uid(gsid)
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -584,7 +590,7 @@ def get_my_name():
     if name != '':
         return name
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
-    r = requests.get(url)
+    r = requests.get(url, headers=headers)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -627,7 +633,7 @@ def get_follow():
             url = f'https://m.weibo.cn/api/container/getIndex?containerid=231093_-_selffollowed&page={page}'
             while True:
                 try:
-                    r = requests.get(url, cookies=cookies)
+                    r = requests.get(url, cookies=cookies, headers=headers)
                     if r.status_code == 418:
                         raise
                     r.json()
@@ -658,7 +664,7 @@ def get_follow():
         since_id = ''
         while True:
             url = f'https://m.weibo.cn/api/container/getIndex?containerid=231016_-_selffans&since_id={since_id}'
-            r = requests.get(url, cookies=cookies)
+            r = requests.get(url, cookies=cookies, headers=headers)
             if r.status_code == 418:
                 wait_time(60)
             if r.json()['ok'] == 0:
@@ -731,7 +737,6 @@ def write_gen():
 
 
 w_gen = write_gen()
-
 next(w_gen)
 
 
@@ -792,21 +797,15 @@ def get_mid(cid):
                 pass
         card_page = 0
         try:
-            # 判断是否是第一页
-            if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
-                card_page = 1
-                mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
-                if analysis_and_join_list(mblog) is None:
-                    with lock:
-                        w_gen.send({'正在爬取页数': None})
-                    return
-            card_group = r.json()['data']['cards'][card_page]['card_group']
-            for j in card_group:
-                mblog = j['mblog']
-                if analysis_and_join_list(mblog) is None:
-                    with lock:
-                        w_gen.send({'正在爬取页数': None})
-                    return
+            for cards in r.json()['data']['cards']:
+                if 'card_group' in cards:
+                    for card in cards['card_group']:
+                        if card['card_type'] == '9':
+                            mblog = card['mblog']
+                            if analysis_and_join_list(mblog) is None:
+                                with lock:
+                                    w_gen.send({'正在爬取页数': None})
+                                return
             since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
         except:
             pass
@@ -973,7 +972,7 @@ def get_uid(gsid, config=False):
     url = 'https://m.weibo.cn/api/config'
     while True:
         try:
-            r = requests.get(url, cookies=cookies)
+            r = requests.get(url, cookies=cookies, headers=headers)
         except requests.exceptions.SSLError:
             time.sleep(1)
             continue
@@ -1016,7 +1015,7 @@ def find_super_topic(name):
     :return:
     """
     url = 'https://m.weibo.cn/api/container/getIndex?containerid=100103type=1%26q=' + name
-    r = requests.get(url)
+    r = requests.get(url, headers=headers)
     logging.info(str(r.status_code))
     return re.findall('100808[\d\w]{32}', r.text)[0]
 
@@ -1029,7 +1028,7 @@ def get_bid(mid):
     :return:
     """
     url = 'https://m.weibo.cn/detail/' + mid
-    r = requests.get(url)
+    r = requests.get(url, headers=headers)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1045,17 +1044,18 @@ def group_chat_comments(gid):
     :return:
     """
     cookies = {'SUB': gsid}
-    headers = {'referer': 'https://m.weibo.cn'}
+    h = {'referer': 'https://m.weibo.cn'}
+    h.update(headers)
 
     # 获取uid
-    uid = get_uid(gsid)
+    uid = get_uid(gsid, config=True)
 
     # 获取bid
     bid = get_bid(my_mid)
 
     # 获取st,群信息
     url = 'https://m.weibo.cn/api/groupchat/list?gid=' + gid
-    r = requests.get(url, cookies=cookies, headers=headers)
+    r = requests.get(url, cookies=cookies, headers=h)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1071,7 +1071,7 @@ def group_chat_comments(gid):
     # 评论
     url = 'https://m.weibo.cn/api/groupchat/send'
     data = {'content': f'http://weibo.com/{uid}/{bid}', 'gid': gid, 'st': st}
-    r = requests.post(url, cookies=cookies, data=data, headers=headers)
+    r = requests.post(url, cookies=cookies, data=data, headers=h)
     if r.json()['ok'] == 1:
         print('发送成功：' + title)
     else:
@@ -1092,6 +1092,7 @@ def unwritable():
         writable = True
 
 
+@retry(3, 1)
 def vip_sign(gsid):
     """
     每日vip签到成长值+1
@@ -1100,9 +1101,10 @@ def vip_sign(gsid):
     """
     url = 'https://new.vip.weibo.cn/aj/task/qiandao?task_id=1&F=growth_yhzx_didao'
     cookies = {'SUB': gsid}
-    headers = {
+    h = {
         'Referer': 'https://new.vip.weibo.cn'}
-    r = requests.get(url, headers=headers, cookies=cookies)
+    h.update(headers)
+    r = requests.get(url, headers=h, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1122,11 +1124,12 @@ def vip_pk(gsid):
     """
     url = 'https://new.vip.weibo.cn/task/pk?from_pk=1&task_id=66'
     cookies = {'SUB': gsid}
-    headers = {
+    h = {
         'Referer': 'https://new.vip.weibo.cn'}
+    h.update(headers)
 
     # 获取pk对象
-    r = requests.get(url, headers=headers, cookies=cookies)
+    r = requests.get(url, headers=h, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1146,7 +1149,7 @@ def vip_pk(gsid):
 
     # 获取pk结果
     url = f'https://new.vip.weibo.cn/pk?uid={action}&task_id=66&from=from_task_pk'
-    r = requests.get(url, headers=headers, cookies=cookies)
+    r = requests.get(url, headers=h, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1175,7 +1178,7 @@ def vip_pk(gsid):
             print(j.find('header').text.strip())
     url = f'https://new.vip.weibo.cn/aj/pklog'
     data = {'duid': action, 'flag': flag, 'F': ''}
-    r = requests.post(url, headers=headers, cookies=cookies, data=data)
+    r = requests.post(url, headers=h, cookies=cookies, data=data)
     print(r.json()['msg'])
 
 
@@ -1187,13 +1190,14 @@ def vip_task_complete(gsid):
     """
     url = 'https://new.vip.weibo.cn/aj/task/addscore'
     cookies = {'SUB': gsid}
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     try:
         print(r.json()['msg'])
     except:
         pass
 
 
+@retry(3, 1)
 def sign_points(gsid):
     """
     连续访问积分
@@ -1204,12 +1208,13 @@ def sign_points(gsid):
     :return:
     """
     url = 'https://huati.weibo.cn/aj/super/receivescore'
-    headers = {
+    h = {
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': 'https://huati.weibo.cn'}
+    h.update(headers)
     cookies = {'SUB': gsid}
     data = {'type': 'REQUEST', 'user_score': 999}
-    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    r = requests.post(url, headers=h, data=data, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1262,7 +1267,7 @@ def get_st(parmas, gsid):
     return st
 
 
-@retry(20, 3)
+@retry(20, 300)
 def login_points(gsid):
     """
     超话登录积分 +10
@@ -1271,8 +1276,9 @@ def login_points(gsid):
     """
     parmas = {'from': '21A3095010', 'ti': str(int(time.time() * 1000))}
     st = get_st(parmas, gsid)
-    headers = {'gsid': gsid, 'st': st}
-    r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=headers)
+    h = {'gsid': gsid, 'st': st}
+    h.update(headers)
+    r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=h)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1351,8 +1357,8 @@ def zero_handle(run=False):
                     t = info['t']
                     mid = info['mid']
                     title = info['title']
-                    if title == weibo_title and t > time.time() - get_time_after_zero() or abs(
-                            t - get_close_zero_time()) < 600:
+                    if title == weibo_title and (t > time.time() - get_time_after_zero() or abs(
+                            t - get_close_zero_time()) < 600):
                         my_mid = mid
                         add_config(my_mid)
                         return
@@ -1550,7 +1556,7 @@ if __name__ == '__main__':
     repost_and_del = True  # 转发完就删除，删除后积分不会扣除
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(10, 20))  # 获取微博等待时间
-    start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
+    start_comment_num = random_gen(range(10, 60))  # 开始评论的评论数量
     last_comment_for_zero_time = 600  # 距离0点前开始今天最后一次评论的时间，23:50分最后一次评论
     comment_max = 2000  # 一天最多评论次数，超过后等待零点继续
     loop_comments_num = 99999  # 循环运行次数
@@ -1565,7 +1571,8 @@ if __name__ == '__main__':
     st_name = '橘子工厂'
 
     # 发送微博的标题
-    weibo_title = f'#{st_name}[超话]##鞠婧祎漂亮书生# jjy#鞠婧祎如意芳霏# jjy#鞠婧祎青春环游记# @鞠婧祎 🍊鞠婧祎雪文曦🍊鞠婧祎傅容🍊'
+    # weibo_title = f'#{st_name}[超话]##鞠婧祎慕南枝# 🍊 #鞠婧祎姜保宁# 🍊 #鞠婧祎如意芳霏# jjy#鞠婧祎傅容##电视剧如意芳霏# @鞠婧祎 🍊鞠婧祎雪文曦🍊鞠婧祎傅容🍊'
+    weibo_title = f'#鞠婧祎慕南枝# jjy#鞠婧祎满月之下请相爱# @鞠婧祎 鞠婧祎慕南枝🍊 鞠婧祎姜保宁🍊 鞠婧祎满月之下请相爱🍊 鞠婧祎雷初夏🍊 @鞠婧祎 @鞠婧祎 @鞠婧祎 @鞠婧祎'
 
     # 需要转发的微博
     repost_weibo_dict = {
@@ -1589,7 +1596,7 @@ if __name__ == '__main__':
 
     # 随机评论列表
     random_list = [
-        '@{name} #鞠婧祎漂亮书生# jjy#鞠婧祎如意芳霏# jjy#鞠婧祎青春环游记# @鞠婧祎 🍊鞠婧祎雪文曦🍊鞠婧祎傅容🍊',
+        '@{name} #鞠婧祎慕南枝# jjy#鞠婧祎满月之下请相爱# @鞠婧祎 鞠婧祎慕南枝🍊 鞠婧祎姜保宁🍊 鞠婧祎满月之下请相爱🍊 鞠婧祎雷初夏🍊 @鞠婧祎 @鞠婧祎 @鞠婧祎 @鞠婧祎',
         '@{name} 【鞠婧祎云上恋歌】🍊【鞠婧祎如意芳霏】🍊【鞠婧祎芸汐传】🍊【鞠婧祎恋爱告急】🍊【鞠婧祎叹云兮】🍊【鞠婧祎壁纸】🍊【鞠婧祎头像】🍊【鞠婧祎穿搭】🍊 【鞠婧祎美图】',
         '@{name} 神仙颜值鞠婧祎✨💜人间理想鞠婧祎✨💛温柔体贴鞠婧祎✨💚治愈微笑鞠婧祎✨💙不可替代鞠婧祎✨❤深得我心鞠婧祎✨💜星辰皓月鞠婧祎✨💛金光闪闪鞠婧祎✨💚一见钟情鞠婧祎✨💙宝藏女孩鞠婧祎✨❤',
         '@{name} 鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎鞠婧祎',
@@ -1610,11 +1617,42 @@ if __name__ == '__main__':
         '@{name} 如意芳霏，人间美满。我路过泥泞路过风，也路过你，恰似春光乍现。 初心不负，遇见傅容@鞠婧祎',
         '@{name} 芊芊少女，美人如玉。此次归来，书写爱情的新篇章。是琴瑟之好，也是连枝共冢。让我们跟随@鞠婧祎 饰演的傅容，走入《如意芳霏》中的爱情世界吧！期待鞠婧祎傅容，期待《如意芳霏》',
         '@{name} 如意芳霏如你，韶华荏苒如你，渐行渐远渐无书，流年似水似柔情，缘世今生都有你，梦里梦外都是你 。@鞠婧祎',
-        '@{name} 期待@鞠婧祎 饰演的傅容妹妹[给你小心心]她不仅是高高在上的肃王妃，也是掌管如意楼的女掌柜，国家暗卫在手[并不简单]爱情事业双丰收，江湖朝堂都有她的传说～甜爽再度升级，双重预知的新颖设定，我i了[羞嗒嗒]',
-        '@{name} 前世她身为长安府尹之女，却下场凄凉；重生的她大彻大悟，女性意识觉醒，霸气十足。且看真诚坦率的傅容@鞠婧祎 如何凭借“预祝梦”的金手指，自立自强，走向人生巅峰。和傅容开启一段翻涌朝权的甜爽之恋吧！ http://t.cn/A6LiHtA4',
+        # '@{name} 期待@鞠婧祎 饰演的傅容妹妹[给你小心心]她不仅是高高在上的肃王妃，也是掌管如意楼的女掌柜，国家暗卫在手[并不简单]爱情事业双丰收，江湖朝堂都有她的传说～甜爽再度升级，双重预知的新颖设定，我i了[羞嗒嗒]',
+        # '@{name} 前世她身为长安府尹之女，却下场凄凉；重生的她大彻大悟，女性意识觉醒，霸气十足。且看真诚坦率的傅容@鞠婧祎 如何凭借“预祝梦”的金手指，自立自强，走向人生巅峰。和傅容开启一段翻涌朝权的甜爽之恋吧！',
         '@{name} 舞台影视双栖全能偶像鞠婧祎，一番女主剧《芸汐传》爱奇艺播放量破45亿拿下2018年度网剧年亚2020年上星湖南卫视创近三年以来五大卫视白天剧单集最高收视率，主演《新白娘子传奇》31次登顶V榜演员榜日榜🏆荣获2019年年度戏剧潜力艺人，期待待播剧《云上恋歌》《如意芳霏》不畏前路艰险，与尔炽烈同行',
         '@{name} 女扮男装，书墨飘香。古曾有“女子无才便是德”的说法，而家境贫寒的她不愿放弃对知识的渴望。聪明伶俐，美丽善良，楚楚动人，她就是雪文曦。一起来看看《漂亮书生》雪文曦@鞠婧祎 求学的故事吧！',
-        '@{name} 人间仙子雪文曦🌟勤劳养家雪文曦🌟抄书小天使雪文曦🌟古代打印机雪文曦🌟云上幺弟雪文曦🌟人间奶瓜雪文曦🌟绝世可爱雪文曦🌟'
+        '@{name} 人间仙子雪文曦🌟勤劳养家雪文曦🌟抄书小天使雪文曦🌟古代打印机雪文曦🌟云上幺弟雪文曦🌟人间奶瓜雪文曦🌟绝世可爱雪文曦🌟',
+        # '@{name} #如意芳霏定档# 喜迎娇花浓浓@鞠婧祎 母凭子贵再现！#芸汐如意了#',
+        '@{name} @鞠婧祎 是人间春光旖旎，亦是世上如意芳霏，傅容自有她的盛才与心气，聪敏好学而自强自立，坚守本心绝不随波逐流，正是，有傅容兮，见之不忘',
+        '@{name} 前世她是韩芸汐，这一世她是傅容。前世留给我们的很多意难平，很多还没实现的心愿希望能在这一世实现[泪]。期待@鞠婧祎 带给我们的《如意芳霏》[打call][打call]',
+        '@{name} 她不仅是高高在上的肃王妃，也是掌管如意楼的女掌柜，国家暗卫在手。爱情事业双丰收，江湖朝堂都有她的传说～甜爽再度升级，双重预知改命的新颖设定，我i了@鞠婧祎',
+        # '@{name} 等了八百年的《如意芳霏》终于来了!本心碎芸汐传剧粉这就赶来，听说在《如意芳霏》这里大家想看的都能看到。还有速溶夫妇双预知逆天改命搞事业，人设带感，剧情升级，傅容@鞠婧祎 在爱奇艺《如意芳霏》等着你!',
+        # '@{name} 千呼万唤始出来😿热情迎接我的绝美宝贝幺女傅容出生！双预知设定搞笑正经甜虐俱全我可以[舔屏] #鞠婧祎如意芳霏#',
+        '@{name} 写意人间，如意芳霏。为你千万遍，唱不尽，相思阙。邀你一起品这诗画烟火中的一绝，绯陌倾城，绝色佳人@鞠婧祎',
+        # '@{name} 她来了她来了？！那个古灵精怪人人爱 霸道王爷腹黑皇叔都扛不住的信都第一美人傅容本容吗[吃惊]听说还有一头撞出的预知梦开挂设定！拥有上帝视角的聪明女主角甜虐爽剧她就要来了吗！🙊',
+        # '@{name} 人间绝色，芳霏傅容@鞠婧祎 恭喜#鞠婧祎如意芳霏# 定档，期待接下来看到浓浓的日子，预祝如意芳霏大火🔥',
+        '@{name} 呜呜呜爷青回[haha]梦回18年那个夏天，前世今生，如梦似幻，@鞠婧祎 傅容宝贝再续前缘，这次俺要看甜甜的爱情[害羞]，我们一起期待，来爱奇艺看我们傅容小可爱如何开启一段旷世奇缘@鞠婧祎',
+        # '@{name} 把超话标识删了才能带两个话题的阅读量，发帖可以多带鞠婧祎相关话题和多多@鞠婧祎 哦~',
+        # '@{name} 把超话标识删了才能带两个话题的阅读量，发帖可以多带鞠婧祎相关话题和多多@鞠婧祎 哦~',
+        # '@{name} 把超话标识删了才能带两个话题的阅读量，发帖可以多带鞠婧祎相关话题和多多@鞠婧祎 哦~',
+        '@{name} 朝堂上，她叱咤风云，建言献策，机智应对化解一次次危机。爱情中，她温婉贤惠，与心爱之人并肩携手，不离不弃。姜保宁的故事即将展开，让我们跟随@鞠婧祎 一起，走进她的传奇人生',
+        '@{name} 嘉南郡主，杀青快乐，期待相见@鞠婧祎 http://t.cn/A6GnBPMJ',
+        '@{name} 高冷霸气美郡主，玉容冰肌姜保宁。运筹帷幄诸葛智，雍容华丽美人资。腹黑郡主与甜美小娇妻的华丽化身，且看她如何叱咤风云，舌战群儒，创一代辉煌。话不多，让我们共同期待@鞠婧祎 饰演的霸气郡主姜保宁的到来！',
+        '@{name} 冰清似玉润，香培如玉琢。佳人一回眸，绝色世无双。孔明诸葛智，运筹无人敌。试问是何人，二者皆可拥？唯有姜保宁。保宁乃佳人，国色比天香，聪慧堪诸葛，胸中有大志，巾帼胜须眉。恭迎@鞠婧祎 姜保宁郡主大驾光临！',
+        '@{name} 期待高贵霸气的姜保宁郡主！不再是走逆袭剧本的灰姑娘，而是一开始就站在终点线前的人生赢家！朝堂之上可力排众议、舌战群臣，军事上发明机关、黑科技满满，生活中又有忠犬老公相伴，温馨甜蜜，想了解宁宁子@鞠婧祎 的幸福生活就来看《慕南枝》噢！',
+        '@{name} 伴随重生的爱恨纠葛，朝堂上的暗流涌动，本意于过平凡生活的她，却运用自己的智慧与力量平衡各方势力。期待《慕南枝》，期待早日与姜保宁@鞠婧祎 相见。',
+        '@{name} 她是在朝堂上叱咤风云，用过人智慧与冷静掌控大局的郡主，皇后，太后姜保宁。也是在爱情中与夫君互相陪伴支持，狂撒狗粮狂发糖的甜甜小宁宁。重生归来，她斗宵小，护至亲，狂霸酷炫拽本人姜保宁@鞠婧祎，初次见面，暴风期待。',
+        '@{name} 她@鞠婧祎 ，是善良的姜保宁，也是依靠自己力量平衡朝堂各方势力，在宫廷中一步步成长的嘉南郡主🤔初次见面，很高兴见到你[羞嗒嗒]#鞠婧祎慕南枝#',
+        '@{name} “柳腰春风过，百鸟随香走。”宫中郡主姜保宁冰肌玉骨、国色天香，在爱与权力中不断寻找自己，不断寻找真心的爱。让我们跟随@鞠婧祎 饰演的姜保宁走进朝堂，走进《慕南枝》。',
+        '@{name} 爱与恨一水烟云，生与死一瞬阴阳，情与仇一心之隔，悔与过一念之悟，看《慕南枝》揭朝堂秘事，鞠婧祎化身姜保宁郡主黎明重生是否能逆转命运安排，只为携手一人重踏巅峰，剑斩苍穹。故事新颖有挑战，期待@鞠婧祎 带来演技与造型的双重突破！',
+        '@{name} #鞠婧祎慕南枝# 一别旧梦重回此生看@鞠婧祎  姜宪皇后历经朝堂变幻，风云再起指点江山只为逆天改命有缘执手今生看花开花谢✨',
+        '@{name} 小时候我就知道月亮上有人，只是没想到有一天她会从天而降，雷初夏那我们就在满月之下相爱吧！期待@鞠婧祎 雷初夏带给我们的奇幻爱情之旅 http://t.cn/A6GnBMUJ',
+        '@{name} 四下皆是你，入目无他人，无论如何错过，满月之下终将遇见💓雷初夏 @鞠婧祎 麻麻来啦',
+        '@{name} 一场穿越时空的爱恋，一次揭开多年秘密的追踪 初夏 你好，初次见面请多指教[喵喵]@鞠婧祎',
+        '@{name} 一场穿梭时空的爱恋 一次揭开多年秘密的追踪 甜爱烧脑两不误 期待演员鞠婧祎精彩演绎跟往常不一样的主角 你好雷初夏[打call]@鞠婧祎',
+        '@{name} “无论如何错过 宇宙也终将让我们相遇”，穿越时空的爱恋，虚拟和现实交汇，夏有凉风冬有雪，满月之下，又见爱情。失忆少女雷初夏乘着月光，再度光临奇妙的世纪。期待@鞠婧祎 的精彩演绎，开启一场奇幻之旅！',
+        '@{name} #满月之下请相爱官宣# 今朝梦醒，十年一瞬，陪元气少女雷初夏甜甜恋爱，看扑朔迷离奇遇共寻答案，欢迎来到满月之下的奇幻旅程，期待雷初夏，期待演员@鞠婧祎',
+        '@{name} #鞠婧祎日系青春风MV# 好唯美的冬日恋歌！曾经，我们约定一起沐浴这个冬季的第一场雪，虽然第一场雪来的有点晚，但是它还是来了，可惜我们的约定被搁浅在了岁月里，勾起回忆既苦涩又美好，还温暖人心@鞠婧祎'
     ]
 
     # 随机评论
