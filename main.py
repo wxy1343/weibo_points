@@ -2,15 +2,17 @@ import contextlib
 import hashlib
 import json
 import logging
+import os
 import random
 import re
 import sys
 import time
-import os
 from multiprocessing.dummy import Pool
 from threading import Lock, Thread
+
 import requests
 from bs4 import BeautifulSoup
+
 from config import Config
 
 lock = Lock()
@@ -46,14 +48,15 @@ def create_weibo(text, cid):
             mid = create_weibo(text, cid)
             return mid
 
-    headers = {'Referer': 'https://weibo.com'}
+    h = {'Referer': 'https://weibo.com'}
+    h.update(headers)
     cookies = {'SUB': gsid}
     data = {
         'text': text, 'sync_wb': '1',
         'api': f'http://i.huati.weibo.com/pcpage/operation/publisher/sendcontent?sign=super&page_id={cid}',
         'topic_id': f'1022:{cid}'}
     url = 'https://weibo.com/p/aj/proxy?ajwvr=6'
-    r = requests.post(url, data=data, cookies=cookies, headers=headers)
+    r = requests.post(url, data=data, cookies=cookies, headers=h)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -143,7 +146,7 @@ def comment(args):
                 is_frequent = True
                 com_err_num += 1
                 return False
-            r = requests.get(detail_url, cookies=cookies)
+            r = requests.get(detail_url, cookies=cookies, headers=headers)
             logging.info(str(r.status_code))
             if r.status_code == 200:
                 break
@@ -162,7 +165,7 @@ def comment(args):
     data = {'content': content, 'mid': mid, 'st': st}
     while True:
         try:
-            r = requests.post(url, data=data, cookies=cookies, timeout=1)
+            r = requests.post(url, data=data, cookies=cookies, headers=headers, timeout=1)
             try:
                 logging.info(str(r.status_code) + ':' + mid + ':' + str(r.json()))
             except:
@@ -241,14 +244,15 @@ def edit_weibo(mid, content):
     print('正在修改微博')
     cookies = {'SUB': gsid}
     url = f'https://m.weibo.cn/detail/{mid}'
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     logging.info(str(r.status_code))
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     url = f'https://m.weibo.cn/api/statuses/update'
     data = {'content': content, 'editId': mid, 'st': st}
-    headers = {'Referer': 'https://m.weibo.cn'}
-    r = requests.post(url, data=data, cookies=cookies, headers=headers)
+    h = {'Referer': 'https://m.weibo.cn'}
+    h.update(headers)
+    r = requests.post(url, data=data, cookies=cookies, headers=h)
     logging.info(str(r.status_code))
     if r.json()['ok'] == 1:
         print('修改微博成功')
@@ -299,14 +303,15 @@ def repost_weibo(mid, content):
     """
     url = 'https://m.weibo.cn/compose/repost'
     cookies = {'SUB': gsid}
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     logging.info(str(r.status_code))
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     data = {'content': content, 'mid': mid, 'st': st}
-    headers = {'Referer': 'https://m.weibo.cn'}
+    h = {'Referer': 'https://m.weibo.cn'}
+    h.update(headers)
     url = 'https://m.weibo.cn/api/statuses/repost'
-    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    r = requests.post(url, headers=h, data=data, cookies=cookies)
     logging.info(str(r.status_code))
     if r.json()['ok'] == 1:
         new_mid = r.json()['data']['mid']
@@ -328,13 +333,14 @@ def del_weibo(mid):
     """
     url = 'https://m.weibo.cn'
     cookies = {'SUB': gsid}
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     st = r.cookies.get_dict()['XSRF-TOKEN']
     cookies.update(r.cookies.get_dict())
     data = {'mid': mid, 'st': st}
-    headers = {'Referer': 'https://m.weibo.cn'}
+    h = {'Referer': 'https://m.weibo.cn'}
+    h.update(headers)
     url = 'https://m.weibo.cn/profile/delMyblog'
-    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    r = requests.post(url, headers=h, data=data, cookies=cookies)
     with unwritable():
         print(r.json()['msg'])
     if r.json()['ok'] == 1:
@@ -553,7 +559,7 @@ def get_weibo_info(gsid):
     cookies = {'SUB': gsid}
     uid = get_uid(gsid)
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -584,7 +590,7 @@ def get_my_name():
     if name != '':
         return name
     url = f'https://m.weibo.cn/profile/info?uid={uid}'
-    r = requests.get(url)
+    r = requests.get(url, headers=headers)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -627,7 +633,7 @@ def get_follow():
             url = f'https://m.weibo.cn/api/container/getIndex?containerid=231093_-_selffollowed&page={page}'
             while True:
                 try:
-                    r = requests.get(url, cookies=cookies)
+                    r = requests.get(url, cookies=cookies, headers=headers)
                     if r.status_code == 418:
                         raise
                     r.json()
@@ -658,7 +664,7 @@ def get_follow():
         since_id = ''
         while True:
             url = f'https://m.weibo.cn/api/container/getIndex?containerid=231016_-_selffans&since_id={since_id}'
-            r = requests.get(url, cookies=cookies)
+            r = requests.get(url, cookies=cookies, headers=headers)
             if r.status_code == 418:
                 wait_time(60)
             if r.json()['ok'] == 0:
@@ -731,7 +737,6 @@ def write_gen():
 
 
 w_gen = write_gen()
-
 next(w_gen)
 
 
@@ -792,21 +797,15 @@ def get_mid(cid):
                 pass
         card_page = 0
         try:
-            # 判断是否是第一页
-            if r.json()['data']['cards'][0]['card_group'][0]['card_type'] == '121':
-                card_page = 1
-                mblog = r.json()['data']['cards'][0]['card_group'][1]['mblog']
-                if analysis_and_join_list(mblog) is None:
-                    with lock:
-                        w_gen.send({'正在爬取页数': None})
-                    return
-            card_group = r.json()['data']['cards'][card_page]['card_group']
-            for j in card_group:
-                mblog = j['mblog']
-                if analysis_and_join_list(mblog) is None:
-                    with lock:
-                        w_gen.send({'正在爬取页数': None})
-                    return
+            for cards in r.json()['data']['cards']:
+                if 'card_group' in cards:
+                    for card in cards['card_group']:
+                        if card['card_type'] == '9':
+                            mblog = card['mblog']
+                            if analysis_and_join_list(mblog) is None:
+                                with lock:
+                                    w_gen.send({'正在爬取页数': None})
+                                return
             since_id = '&since_id=' + str(r.json()['data']['pageInfo']['since_id'])
         except:
             pass
@@ -973,7 +972,7 @@ def get_uid(gsid, config=False):
     url = 'https://m.weibo.cn/api/config'
     while True:
         try:
-            r = requests.get(url, cookies=cookies)
+            r = requests.get(url, cookies=cookies, headers=headers)
         except requests.exceptions.SSLError:
             time.sleep(1)
             continue
@@ -1016,7 +1015,7 @@ def find_super_topic(name):
     :return:
     """
     url = 'https://m.weibo.cn/api/container/getIndex?containerid=100103type=1%26q=' + name
-    r = requests.get(url)
+    r = requests.get(url, headers=headers)
     logging.info(str(r.status_code))
     return re.findall('100808[\d\w]{32}', r.text)[0]
 
@@ -1029,7 +1028,7 @@ def get_bid(mid):
     :return:
     """
     url = 'https://m.weibo.cn/detail/' + mid
-    r = requests.get(url)
+    r = requests.get(url, headers=headers)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1045,17 +1044,18 @@ def group_chat_comments(gid):
     :return:
     """
     cookies = {'SUB': gsid}
-    headers = {'referer': 'https://m.weibo.cn'}
+    h = {'referer': 'https://m.weibo.cn'}
+    h.update(headers)
 
     # 获取uid
-    uid = get_uid(gsid)
+    uid = get_uid(gsid, config=True)
 
     # 获取bid
     bid = get_bid(my_mid)
 
     # 获取st,群信息
     url = 'https://m.weibo.cn/api/groupchat/list?gid=' + gid
-    r = requests.get(url, cookies=cookies, headers=headers)
+    r = requests.get(url, cookies=cookies, headers=h)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1071,7 +1071,7 @@ def group_chat_comments(gid):
     # 评论
     url = 'https://m.weibo.cn/api/groupchat/send'
     data = {'content': f'http://weibo.com/{uid}/{bid}', 'gid': gid, 'st': st}
-    r = requests.post(url, cookies=cookies, data=data, headers=headers)
+    r = requests.post(url, cookies=cookies, data=data, headers=h)
     if r.json()['ok'] == 1:
         print('发送成功：' + title)
     else:
@@ -1092,6 +1092,7 @@ def unwritable():
         writable = True
 
 
+@retry(3, 1)
 def vip_sign(gsid):
     """
     每日vip签到成长值+1
@@ -1100,9 +1101,10 @@ def vip_sign(gsid):
     """
     url = 'https://new.vip.weibo.cn/aj/task/qiandao?task_id=1&F=growth_yhzx_didao'
     cookies = {'SUB': gsid}
-    headers = {
+    h = {
         'Referer': 'https://new.vip.weibo.cn'}
-    r = requests.get(url, headers=headers, cookies=cookies)
+    h.update(headers)
+    r = requests.get(url, headers=h, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1122,11 +1124,12 @@ def vip_pk(gsid):
     """
     url = 'https://new.vip.weibo.cn/task/pk?from_pk=1&task_id=66'
     cookies = {'SUB': gsid}
-    headers = {
+    h = {
         'Referer': 'https://new.vip.weibo.cn'}
+    h.update(headers)
 
     # 获取pk对象
-    r = requests.get(url, headers=headers, cookies=cookies)
+    r = requests.get(url, headers=h, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1146,7 +1149,7 @@ def vip_pk(gsid):
 
     # 获取pk结果
     url = f'https://new.vip.weibo.cn/pk?uid={action}&task_id=66&from=from_task_pk'
-    r = requests.get(url, headers=headers, cookies=cookies)
+    r = requests.get(url, headers=h, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1175,7 +1178,7 @@ def vip_pk(gsid):
             print(j.find('header').text.strip())
     url = f'https://new.vip.weibo.cn/aj/pklog'
     data = {'duid': action, 'flag': flag, 'F': ''}
-    r = requests.post(url, headers=headers, cookies=cookies, data=data)
+    r = requests.post(url, headers=h, cookies=cookies, data=data)
     print(r.json()['msg'])
 
 
@@ -1187,13 +1190,14 @@ def vip_task_complete(gsid):
     """
     url = 'https://new.vip.weibo.cn/aj/task/addscore'
     cookies = {'SUB': gsid}
-    r = requests.get(url, cookies=cookies)
+    r = requests.get(url, cookies=cookies, headers=headers)
     try:
         print(r.json()['msg'])
     except:
         pass
 
 
+@retry(3, 1)
 def sign_points(gsid):
     """
     连续访问积分
@@ -1204,12 +1208,13 @@ def sign_points(gsid):
     :return:
     """
     url = 'https://huati.weibo.cn/aj/super/receivescore'
-    headers = {
+    h = {
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': 'https://huati.weibo.cn'}
+    h.update(headers)
     cookies = {'SUB': gsid}
     data = {'type': 'REQUEST', 'user_score': 999}
-    r = requests.post(url, headers=headers, data=data, cookies=cookies)
+    r = requests.post(url, headers=h, data=data, cookies=cookies)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1262,7 +1267,7 @@ def get_st(parmas, gsid):
     return st
 
 
-@retry(20, 3)
+@retry(20, 300)
 def login_points(gsid):
     """
     超话登录积分 +10
@@ -1271,8 +1276,9 @@ def login_points(gsid):
     """
     parmas = {'from': '21A3095010', 'ti': str(int(time.time() * 1000))}
     st = get_st(parmas, gsid)
-    headers = {'gsid': gsid, 'st': st}
-    r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=headers)
+    h = {'gsid': gsid, 'st': st}
+    h.update(headers)
+    r = requests.get('https://chaohua.weibo.cn/remind/active', params=parmas, headers=h)
     try:
         logging.info(str(r.status_code) + ':' + str(r.json()))
     except:
@@ -1351,8 +1357,8 @@ def zero_handle(run=False):
                     t = info['t']
                     mid = info['mid']
                     title = info['title']
-                    if title == weibo_title and t > time.time() - get_time_after_zero() or abs(
-                            t - get_close_zero_time()) < 600:
+                    if title == weibo_title and (t > time.time() - get_time_after_zero() or abs(
+                            t - get_close_zero_time()) < 600):
                         my_mid = mid
                         add_config(my_mid)
                         return
@@ -1545,12 +1551,12 @@ if __name__ == '__main__':
     at_comment = False  # 是否评论@自己的，检测微博标题是否@自己，只适用于上面两条过滤条件后生效
     at_file = False  # 爬取超话里的用户名保存到文件
     at_edit_weibo = False  # 自动在微博标题上at超话里的用户，要先开at_file
-    random_repost = True  # 随机转发超话里的的两个微博
+    random_repost = False  # 随机转发超话里的的两个微博
     random_repost_num = 2  # 随机转发微博数量
     repost_and_del = True  # 转发完就删除，删除后积分不会扣除
     get_mid_max = random_gen(range(50, 60))  # 一次最多评论微博数量
     get_weibo_time = random_gen(range(10, 20))  # 获取微博等待时间
-    start_comment_num = random_gen(range(50, 60))  # 开始评论的评论数量
+    start_comment_num = random_gen(range(10, 60))  # 开始评论的评论数量
     last_comment_for_zero_time = 600  # 距离0点前开始今天最后一次评论的时间，23:50分最后一次评论
     comment_max = 2000  # 一天最多评论次数，超过后等待零点继续
     loop_comments_num = 99999  # 循环运行次数
@@ -1562,7 +1568,7 @@ if __name__ == '__main__':
     SCKEY = ''
 
     # 评论的超话
-    st_name = '橘子工厂'
+    st_name = ''
 
     # 发送微博的标题
     weibo_title = f'#{st_name}[超话]#积分！'
@@ -1603,11 +1609,6 @@ if __name__ == '__main__':
     # 自定义关键字评论
     keywords_comment = {
         # 关键字:评论内容
-        '异常': random_comment,
-        '勿带链接': random_comment,
-        '别带链接': random_comment,
-        '勿留链接': random_comment,
-        '别留链接': random_comment
     }
 
     # 带上链接
